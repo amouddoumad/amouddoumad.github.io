@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme:dark)">
 <meta name="theme-color" content="#eef2f9" media="(prefers-color-scheme:light)">
-<title>MAD Arrivals · busiest terminal now</title>
+<title>Llegadas MAD · terminal más concurrida ahora</title>
 <style>
   /* ---------- DARK (default) ---------- */
   :root{
@@ -176,11 +176,11 @@
       <div>
         <h1><span class="plane">🛬</span> Madrid Barajas</h1>
         <p class="sub">
-          <span class="live"><span class="pip"></span>LIVE</span>
-          <span>Arrivals by terminal</span><span id="updated"></span>
+          <span class="live"><span class="pip"></span>EN VIVO</span>
+          <span>Llegadas por terminal</span><span id="updated"></span>
         </p>
       </div>
-      <button class="tbtn" id="themeBtn" aria-label="Toggle light/dark">🌙</button>
+      <button class="tbtn" id="themeBtn" aria-label="Cambiar tema claro/oscuro">🌙</button>
     </div>
   </div>
 </header>
@@ -189,54 +189,55 @@
   <!-- loading / error placeholder -->
   <div class="state" id="state">
     <div class="spin"></div>
-    <div class="big">Loading arrivals…</div>
+    <div class="big">Cargando llegadas…</div>
   </div>
 
   <!-- the app (revealed once data.json loads) -->
   <div id="app">
     <div class="hero">
       <div class="cap">
-        <span class="t" id="heroCap">Busiest terminal now</span>
+        <span class="t" id="heroCap">Terminal más concurrida ahora</span>
         <div class="seg">
-          <button id="segNow" class="on">This hour</button>
-          <button id="segNext">Next hour</button>
+          <button id="segNow" class="on">Esta hora</button>
+          <button id="segNext">Próxima hora</button>
         </div>
       </div>
       <div class="heroMain" id="heroMain"></div>
       <div class="rank" id="heroRank"></div>
     </div>
 
-    <div class="hint">Day totals — tap a terminal to filter the table below</div>
+    <div class="hint">Totales del día — toca una terminal para filtrar la tabla</div>
     <div class="cards" id="cards"></div>
 
     <section>
-      <div class="stitle">Arrivals by hour <span class="mini" id="rangeNote"></span></div>
+      <div class="stitle">Llegadas por hora <span class="mini" id="rangeNote"></span></div>
       <div class="tbl">
         <div class="thead" id="thead"></div>
         <div id="tbody"></div>
       </div>
-      <div class="hint" style="margin-top:9px">Tap any hour to see where its flights come from</div>
+      <div class="hint" style="margin-top:9px">Toca una hora para ver el origen de los vuelos</div>
     </section>
 
     <section>
       <button class="collapse" id="origToggle">
-        <span>🌍 Top origin cities</span><span class="ar">▾</span>
+        <span>🌍 Principales ciudades de origen</span><span class="ar">▾</span>
       </button>
       <div class="orig" id="origins"></div>
     </section>
 
     <div class="btnrow">
-      <button class="btn" onclick="location.reload()">↻ Refresh</button>
-      <button class="btn" id="resetBtn">◱ All terminals</button>
+      <button class="btn" onclick="location.reload()">↻ Actualizar</button>
+      <button class="btn" id="resetBtn">◱ Todas las terminales</button>
     </div>
 
     <p class="foot">
-      Data from the Madrid Barajas arrivals feed, grouped by scheduled arrival hour, and
-      refreshed automatically about every 10 minutes. <b>T4</b> includes the T4S satellite.
-      <b>T3</b> is an auxiliary hall and usually has no scheduled arrivals. The feed covers
-      the current day only, so overnight hours can read zero late in the day.<br>
-      Source: <a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>
-      · <span id="count"></span> flights.
+      Datos del sistema de llegadas del aeropuerto de Madrid-Barajas, agrupados por hora de
+      llegada programada y actualizados automáticamente cada ~10 minutos. La <b>T4</b> incluye
+      el satélite T4S. La <b>T3</b> es una sala auxiliar y normalmente no tiene llegadas
+      programadas. Los datos cubren solo el día en curso, por lo que las horas de madrugada
+      pueden aparecer a cero más tarde en el día.<br>
+      Fuente: <a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>
+      · <span id="count"></span> vuelos.
     </p>
   </div>
 </div>
@@ -244,6 +245,9 @@
 <script>
 const COLOR = {T1:'var(--t1)',T2:'var(--t2)',T3:'var(--t3)',T4:'var(--t4)'};
 const CLS   = {T1:'t1',T2:'t2',T3:'t3',T4:'t4'};
+const MONTHS_ES={Jan:'ene',Feb:'feb',Mar:'mar',Apr:'abr',May:'may',Jun:'jun',
+  Jul:'jul',Aug:'ago',Sep:'sep',Oct:'oct',Nov:'nov',Dec:'dic'};
+const esDate=s=>s?s.replace(/\b([A-Z][a-z]{2})\b/,m=>MONTHS_ES[m]||m):'';
 
 /* ---------- theme (independent of data) ---------- */
 const root=document.documentElement, tbtn=document.getElementById('themeBtn');
@@ -281,7 +285,7 @@ function renderHero(){
   const h = heroWhen==='now' ? base : (base+1)%24;
   const hh = String(h).padStart(2,'0')+':00';
   document.getElementById('heroCap').textContent =
-    heroWhen==='now' ? `Busiest terminal · now ${hh}` : `Busiest terminal · next ${hh}`;
+    heroWhen==='now' ? `Terminal más concurrida · ahora ${hh}` : `Terminal más concurrida · a las ${hh}`;
   const counts=countByTerm(h);
   const ranked=TERMS.map(x=>({t:x,n:counts[x]})).sort((a,b)=>b.n-a.n);
   const top=ranked[0], max=Math.max(1,top.n);
@@ -289,14 +293,14 @@ function renderHero(){
   if(top.n===0){
     main.innerHTML =
       `<div class="bigT" style="background:var(--faint)"><span class="lab">—</span></div>`+
-      `<div class="heroTxt"><div class="heroNone">No arrivals</div>`+
-      `<div class="small">this hour in the feed</div></div>`;
+      `<div class="heroTxt"><div class="heroNone">Sin llegadas</div>`+
+      `<div class="small">esta hora en los datos</div></div>`;
   } else {
     main.innerHTML =
       `<div class="bigT" style="background:${COLOR[top.t]}">`+
-        `<span class="lab">${top.t}</span><span class="go">GO HERE</span></div>`+
+        `<span class="lab">${top.t}</span><span class="go">VE AQUÍ</span></div>`+
       `<div class="heroTxt"><div class="big" style="color:${COLOR[top.t]}">${top.n}</div>`+
-      `<div class="small">flights landing at <b>${top.t}</b> at ${hh}</div></div>`;
+      `<div class="small">vuelos aterrizando en <b>${top.t}</b> a las ${hh}</div></div>`;
   }
   document.getElementById('heroRank').innerHTML = ranked.map((r,i)=>
     `<div class="rk ${i===0&&r.n>0?'win':''}">`+
@@ -329,7 +333,7 @@ function renderTable(){
   let maxCell=1; for(let h=0;h<24;h++)cols.forEach(c=>maxCell=Math.max(maxCell,grid[h][c]));
   document.getElementById('thead').style.cssText=gridClass(cols.length);
   document.getElementById('thead').innerHTML=
-    `<div class="h">Hour</div>`+cols.map(c=>`<div>${c}</div>`).join('')+`<div>Σ</div>`;
+    `<div class="h">Hora</div>`+cols.map(c=>`<div>${c}</div>`).join('')+`<div>Σ</div>`;
   const tb=document.getElementById('tbody'); tb.innerHTML='';
   for(let h=0;h<24;h++){
     let tot=0; cols.forEach(c=>tot+=grid[h][c]);
@@ -341,7 +345,7 @@ function renderTable(){
       const a=n?Math.round((10+55*n/maxCell)):0;
       const bg=n?`style="background:color-mix(in srgb, ${COLOR[c]} ${a}%, transparent)"`:'';
       return `<div class="cell ${n?'':'z'}"><span class="heat" ${bg}>${n||'·'}</span></div>`;}).join('');
-    row.innerHTML=`<div class="h"><span class="chev">▶</span>${hh}${isNow?' <span class="nowchip">NOW</span>':''}</div>`
+    row.innerHTML=`<div class="h"><span class="chev">▶</span>${hh}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`
       +cells+`<div class="tot">${tot||'·'}</div>`;
     row.onclick=()=>{ openHour=(openHour===h?null:h); renderTable(); };
     tb.appendChild(row);
@@ -349,12 +353,12 @@ function renderTable(){
       det.appendChild(originList(h)); tb.appendChild(det); }
   }
   document.getElementById('rangeNote').textContent=
-    cols.length===TERMS.length?'all terminals':cols.join(' · ');
+    cols.length===TERMS.length?'todas las terminales':cols.join(' · ');
 }
 function originList(h){
   const box=document.createElement('div');
   const items=FLIGHTS.filter(f=>f.hour===h && selected.has(f.terminal));
-  if(!items.length){ box.innerHTML='<div class="none">No arrivals this hour.</div>'; return box; }
+  if(!items.length){ box.innerHTML='<div class="none">Sin llegadas esta hora.</div>'; return box; }
   const map=new Map();
   items.forEach(f=>{ const k=f.city+'|'+f.terminal;
     if(!map.has(k)) map.set(k,{city:f.city,code:f.code,terminal:f.terminal,n:0}); map.get(k).n++; });
@@ -399,7 +403,7 @@ function boot(data){
   FLIGHTS=data.flights||[]; TERMS=data.terminals||['T1','T2','T3','T4']; META=data.meta||{};
   NOW_H=madridHour();
   selected=new Set(TERMS);
-  document.getElementById('updated').textContent = META.updated ? `· ${META.updated}` : '';
+  document.getElementById('updated').textContent = META.updated ? `· ${esDate(META.updated)}` : '';
   document.getElementById('count').textContent = FLIGHTS.length;
   document.getElementById('state').style.display='none';
   document.getElementById('app').style.display='block';
@@ -408,9 +412,9 @@ function boot(data){
 }
 function fail(){
   document.getElementById('state').innerHTML =
-    `<div class="big">Couldn't load arrivals data.</div>`+
-    `<div style="margin-top:6px">Please check your connection.</div>`+
-    `<button class="rt" onclick="location.reload()">↻ Try again</button>`;
+    `<div class="big">No se pudieron cargar los datos.</div>`+
+    `<div style="margin-top:6px">Revisa tu conexión.</div>`+
+    `<button class="rt" onclick="location.reload()">↻ Reintentar</button>`;
 }
 
 fetch('data.json?_='+Date.now(), {cache:'no-store'})
