@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#eef2f9" media="(prefers-color-scheme:light)">
+<title>MAD Arrivals · busiest terminal now</title>
+<style>
+  /* ---------- DARK (default) ---------- */
+  :root{
+    --bg:#0a0f1e; --bg2:#16223f; --card:#121c33; --card2:#0f1830; --line:#22304e;
+    --ink:#eaf0ff; --muted:#8ba0c9; --faint:#43547a; --shadow:rgba(0,0,0,.35);
+    --t1:#f2749f; --t2:#5aa9e6; --t3:#f4b942; --t4:#54cf88; --tot:#b79bff; --now:#ff6b57;
+    --heroInk:#0a0f1e;
+  }
+  /* ---------- LIGHT ---------- */
+  :root[data-theme="light"]{
+    --bg:#eef2f9; --bg2:#dbe6fb; --card:#ffffff; --card2:#f3f6fc; --line:#d9e1f0;
+    --ink:#15233d; --muted:#5a6b85; --faint:#93a2bf; --shadow:rgba(30,50,90,.10);
+    --t1:#d81b6a; --t2:#1d6fd0; --t3:#c07d00; --t4:#0f9d55; --tot:#6b46d6; --now:#e23b1f;
+    --heroInk:#ffffff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%,var(--bg2) 0%,transparent 60%),var(--bg);
+    color:var(--ink); font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; padding-bottom:46px; min-height:100vh; overflow-x:hidden;
+    transition:background .2s,color .2s;
+  }
+  .wrap{max-width:640px; margin:0 auto; padding:0 12px}
+
+  header{
+    position:sticky; top:0; z-index:30; backdrop-filter:blur(14px) saturate(1.3);
+    background:color-mix(in srgb,var(--bg) 82%,transparent);
+    border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 12px) 0 11px;
+  }
+  .htop{display:flex; align-items:center; justify-content:space-between; gap:10px}
+  h1{margin:0; font-size:18px; font-weight:800; letter-spacing:.2px; display:flex; align-items:center; gap:8px}
+  h1 .plane{font-size:21px}
+  .sub{margin:5px 0 0; color:var(--muted); font-size:12px; display:flex; gap:7px; align-items:center; flex-wrap:wrap}
+  .live{display:inline-flex; align-items:center; gap:5px; color:var(--t4); font-weight:750}
+  .live .pip{width:7px;height:7px;border-radius:50%;background:var(--t4);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--t4) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  .tbtn{flex:none; width:42px; height:42px; border-radius:12px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:19px; cursor:pointer; display:flex;
+    align-items:center; justify-content:center; box-shadow:0 2px 8px var(--shadow)}
+  .tbtn:active{transform:scale(.94)}
+
+  /* ---------- HERO: busiest terminal now ---------- */
+  .hero{margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:20px;
+    padding:16px 16px 18px; box-shadow:0 6px 22px var(--shadow); position:relative; overflow:hidden}
+  .hero .cap{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px}
+  .hero .cap .t{font-size:11.5px; font-weight:800; letter-spacing:.8px; color:var(--muted); text-transform:uppercase}
+  .seg{display:inline-flex; background:var(--card2); border:1px solid var(--line); border-radius:11px; padding:3px; gap:2px}
+  .seg button{border:0; background:transparent; color:var(--muted); font-weight:750; font-size:12.5px;
+    padding:7px 12px; border-radius:8px; cursor:pointer; min-width:64px}
+  .seg button.on{background:var(--tot); color:var(--heroInk)}
+  .heroMain{display:flex; align-items:center; gap:16px; margin:10px 2px 14px}
+  .bigT{flex:none; width:96px; height:96px; border-radius:24px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; font-weight:900; color:var(--heroInk); line-height:1;
+    box-shadow:0 8px 20px var(--shadow)}
+  .bigT .lab{font-size:34px; letter-spacing:.5px}
+  .bigT .go{font-size:10px; font-weight:800; letter-spacing:1px; margin-top:5px; opacity:.85}
+  .heroTxt .big{font-size:44px; font-weight:900; line-height:1; font-variant-numeric:tabular-nums}
+  .heroTxt .small{color:var(--muted); font-size:13.5px; font-weight:600; margin-top:5px}
+  .heroTxt .small b{color:var(--ink)}
+  .heroNone{font-size:26px; font-weight:800}
+
+  .rank{display:grid; gap:8px}
+  .rk{display:grid; grid-template-columns:34px 1fr 34px; align-items:center; gap:9px}
+  .rk .nm{font-weight:800; font-size:15px}
+  .rk .track{position:relative; height:22px; background:var(--card2); border-radius:8px; overflow:hidden}
+  .rk .fill{position:absolute; left:0; top:0; bottom:0; border-radius:8px; min-width:3px; transition:width .3s}
+  .rk .ct{text-align:right; font-weight:800; font-variant-numeric:tabular-nums; font-size:15px}
+  .rk.win .nm,.rk.win .ct{font-size:16px}
+
+  .hint{color:var(--faint); font-size:12px; margin:18px 2px 8px; letter-spacing:.2px; font-weight:600}
+
+  /* ---------- day totals / filter cards ---------- */
+  .cards{display:grid; grid-template-columns:repeat(5,1fr); gap:7px; width:100%}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 2px 10px;
+    text-align:center; cursor:pointer; min-width:0; box-shadow:0 2px 8px var(--shadow);
+    transition:transform .12s, border-color .15s, opacity .15s}
+  .card:active{transform:scale(.95)}
+  .card .lab{font-size:11px; color:var(--muted); font-weight:800; letter-spacing:.3px}
+  .card .num{font-size:22px; font-weight:900; margin-top:2px; font-variant-numeric:tabular-nums}
+  .card .bar{height:3px; border-radius:3px; margin:7px auto 0; width:56%}
+  .card.off{opacity:.34}
+  .card.t1.on{border-color:var(--t1)} .card.t1 .num{color:var(--t1)} .card.t1 .bar{background:var(--t1)}
+  .card.t2.on{border-color:var(--t2)} .card.t2 .num{color:var(--t2)} .card.t2 .bar{background:var(--t2)}
+  .card.t3.on{border-color:var(--t3)} .card.t3 .num{color:var(--t3)} .card.t3 .bar{background:var(--t3)}
+  .card.t4.on{border-color:var(--t4)} .card.t4 .num{color:var(--t4)} .card.t4 .bar{background:var(--t4)}
+  .card.total{cursor:default} .card.total .num{color:var(--tot)} .card.total .bar{background:var(--tot)}
+
+  section{margin-top:22px}
+  .stitle{font-size:12px; font-weight:800; letter-spacing:.6px; color:var(--muted);
+    text-transform:uppercase; margin:0 2px 10px; display:flex; justify-content:space-between; align-items:center}
+  .stitle .mini{color:var(--faint); font-weight:700; letter-spacing:.2px; text-transform:none; font-size:11.5px}
+
+  /* ---------- hourly table ---------- */
+  .tbl{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 3px 14px var(--shadow)}
+  .thead,.trow{display:grid; align-items:center}
+  .thead{background:var(--card2); position:sticky; top:60px; z-index:10; border-radius:16px 16px 0 0;
+    color:var(--muted); font-size:11.5px; font-weight:800; letter-spacing:.5px; text-align:center; padding:12px 0}
+  .thead .h,.trow .h{text-align:left; padding-left:13px; white-space:nowrap}
+  .trow{padding:13px 0; border-top:1px solid var(--line); cursor:pointer; position:relative;
+    font-variant-numeric:tabular-nums}
+  .trow:last-child{border-radius:0 0 16px 16px}
+  .trow:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+  .trow .h{color:var(--muted); font-weight:750; font-size:15px; display:flex; align-items:center; gap:6px; overflow:visible}
+  .trow .cell{text-align:center; font-weight:750; font-size:15px}
+  .trow .cell.z{color:var(--faint)}
+  .trow .tot{text-align:center; color:var(--tot); font-weight:900; font-size:15px}
+  .trow.empty{opacity:.5}
+  .trow.now{background:color-mix(in srgb,var(--now) 14%,transparent); box-shadow:inset 4px 0 0 var(--now)}
+  .trow.now .h{color:var(--ink); font-weight:900}
+  .nowchip{background:var(--now); color:#fff; font-size:8px; font-weight:900; letter-spacing:.4px;
+    padding:2px 5px; border-radius:5px; flex:none}
+  .chev{color:var(--faint); font-size:10px; transition:transform .18s; display:inline-block}
+  .trow.open .chev{transform:rotate(90deg)}
+  .heat{display:inline-block; min-width:22px; padding:3px 6px; border-radius:8px}
+
+  .detail{display:none; padding:2px 14px 14px; background:color-mix(in srgb,var(--ink) 4%,transparent); border-top:1px solid var(--line)}
+  .detail.show{display:block}
+  .orow{display:flex; align-items:center; gap:9px; padding:8px 0; border-bottom:1px dashed var(--line)}
+  .orow:last-child{border-bottom:0}
+  .odot{width:9px;height:9px;border-radius:50%;flex:none}
+  .ocity{flex:1; font-size:14.5px; font-weight:600}
+  .ocode{color:var(--faint); font-size:11.5px; font-variant-numeric:tabular-nums}
+  .oterm{font-size:11px; font-weight:800; padding:2px 7px; border-radius:6px; letter-spacing:.3px}
+  .detail .none{color:var(--faint); font-size:13px; padding:8px 0}
+
+  /* ---------- collapsible top origins ---------- */
+  .collapse{width:100%; display:flex; align-items:center; justify-content:space-between;
+    background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:14px;
+    padding:14px 16px; font-size:14px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px var(--shadow)}
+  .collapse .ar{color:var(--faint); transition:transform .2s}
+  .collapse.open .ar{transform:rotate(180deg)}
+  .orig{background:var(--card); border:1px solid var(--line); border-top:0; border-radius:0 0 14px 14px;
+    padding:4px 14px; display:none}
+  .orig.show{display:block}
+  .obar{position:relative; padding:12px 0; border-bottom:1px solid var(--line)}
+  .obar:last-child{border-bottom:0}
+  .obar .fill{position:absolute; left:0; top:6px; bottom:6px; border-radius:8px; z-index:0; opacity:.9}
+  .obar .lbl{position:relative; z-index:1; display:flex; justify-content:space-between; align-items:center}
+  .obar .nm{font-weight:750; font-size:15px}
+  .obar .nm small{color:var(--faint); font-weight:700; margin-left:6px; font-size:11px}
+  .obar .ct{font-weight:900; font-variant-numeric:tabular-nums; font-size:15px}
+  .obar .rk2{color:var(--faint); font-weight:900; margin-right:9px; font-variant-numeric:tabular-nums}
+
+  .btnrow{display:flex; gap:10px; margin-top:16px}
+  .btn{flex:1; display:inline-flex; justify-content:center; align-items:center; gap:7px;
+    background:var(--card); border:1px solid var(--line); color:var(--ink); padding:14px;
+    border-radius:13px; font-size:14px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px var(--shadow)}
+  .btn:active{transform:scale(.97)}
+  .foot{color:var(--muted); font-size:11.5px; margin:20px 4px 0; line-height:1.6}
+  .foot a{color:var(--t2)}
+
+  /* ---------- loading / error states ---------- */
+  .state{margin-top:60px; text-align:center; color:var(--muted)}
+  .state .spin{width:38px;height:38px;border-radius:50%;border:3px solid var(--line);
+    border-top-color:var(--t2); margin:0 auto 16px; animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .state .big{font-size:16px; font-weight:700; color:var(--ink)}
+  .state .rt{margin-top:16px; display:inline-block; background:var(--card); border:1px solid var(--line);
+    color:var(--ink); padding:11px 18px; border-radius:12px; font-weight:800; cursor:pointer}
+  #app{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="htop">
+      <div>
+        <h1><span class="plane">🛬</span> Madrid Barajas</h1>
+        <p class="sub">
+          <span class="live"><span class="pip"></span>LIVE</span>
+          <span>Arrivals by terminal</span><span id="updated"></span>
+        </p>
+      </div>
+      <button class="tbtn" id="themeBtn" aria-label="Toggle light/dark">🌙</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- loading / error placeholder -->
+  <div class="state" id="state">
+    <div class="spin"></div>
+    <div class="big">Loading arrivals…</div>
+  </div>
+
+  <!-- the app (revealed once data.json loads) -->
+  <div id="app">
+    <div class="hero">
+      <div class="cap">
+        <span class="t" id="heroCap">Busiest terminal now</span>
+        <div class="seg">
+          <button id="segNow" class="on">This hour</button>
+          <button id="segNext">Next hour</button>
+        </div>
+      </div>
+      <div class="heroMain" id="heroMain"></div>
+      <div class="rank" id="heroRank"></div>
+    </div>
+
+    <div class="hint">Day totals — tap a terminal to filter the table below</div>
+    <div class="cards" id="cards"></div>
+
+    <section>
+      <div class="stitle">Arrivals by hour <span class="mini" id="rangeNote"></span></div>
+      <div class="tbl">
+        <div class="thead" id="thead"></div>
+        <div id="tbody"></div>
+      </div>
+      <div class="hint" style="margin-top:9px">Tap any hour to see where its flights come from</div>
+    </section>
+
+    <section>
+      <button class="collapse" id="origToggle">
+        <span>🌍 Top origin cities</span><span class="ar">▾</span>
+      </button>
+      <div class="orig" id="origins"></div>
+    </section>
+
+    <div class="btnrow">
+      <button class="btn" onclick="location.reload()">↻ Refresh</button>
+      <button class="btn" id="resetBtn">◱ All terminals</button>
+    </div>
+
+    <p class="foot">
+      Data from the Madrid Barajas arrivals feed, grouped by scheduled arrival hour, and
+      refreshed automatically about every 10 minutes. <b>T4</b> includes the T4S satellite.
+      <b>T3</b> is an auxiliary hall and usually has no scheduled arrivals. The feed covers
+      the current day only, so overnight hours can read zero late in the day.<br>
+      Source: <a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>
+      · <span id="count"></span> flights.
+    </p>
+  </div>
+</div>
+
+<script>
+const COLOR = {T1:'var(--t1)',T2:'var(--t2)',T3:'var(--t3)',T4:'var(--t4)'};
+const CLS   = {T1:'t1',T2:'t2',T3:'t3',T4:'t4'};
+
+/* ---------- theme (independent of data) ---------- */
+const root=document.documentElement, tbtn=document.getElementById('themeBtn');
+function applyTheme(t){ root.dataset.theme=t; tbtn.textContent = t==='light'?'☀️':'🌙'; }
+applyTheme(localStorage.getItem('mad-theme') ||
+  (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));
+tbtn.onclick=()=>{ const t=root.dataset.theme==='light'?'dark':'light';
+  localStorage.setItem('mad-theme',t); applyTheme(t); };
+
+/* ---------- data + state ---------- */
+let FLIGHTS=[], TERMS=[], META={}, NOW_H=-1;
+let selected=new Set(), openHour=null, heroWhen='now';
+
+/* Current hour in Madrid, computed in the browser so "NOW" stays correct
+   between scrapes and regardless of the viewer's own timezone. */
+function madridHour(){
+  try{
+    const parts=new Intl.DateTimeFormat('en-GB',
+      {timeZone:'Europe/Madrid',hour:'2-digit',hour12:false}).formatToParts(new Date());
+    const h=parseInt(parts.find(p=>p.type==='hour').value,10);
+    return isNaN(h)?-1:(h%24);
+  }catch(e){ return (typeof META.current_hour==='number')?META.current_hour:-1; }
+}
+
+const countByTerm = h => { const t={}; TERMS.forEach(x=>t[x]=0);
+  FLIGHTS.forEach(f=>{ if(f.hour===h) t[f.terminal]++; }); return t; };
+const dayTotals = () => { const t={}; TERMS.forEach(x=>t[x]=0);
+  FLIGHTS.forEach(f=>t[f.terminal]++); return t; };
+const activeTerms=()=>TERMS.filter(t=>selected.has(t));
+const gridClass=n=>`grid-template-columns:82px repeat(${n},1fr) 38px`;
+
+/* ---------- HERO ---------- */
+function renderHero(){
+  const base = NOW_H>=0 ? NOW_H : 12;
+  const h = heroWhen==='now' ? base : (base+1)%24;
+  const hh = String(h).padStart(2,'0')+':00';
+  document.getElementById('heroCap').textContent =
+    heroWhen==='now' ? `Busiest terminal · now ${hh}` : `Busiest terminal · next ${hh}`;
+  const counts=countByTerm(h);
+  const ranked=TERMS.map(x=>({t:x,n:counts[x]})).sort((a,b)=>b.n-a.n);
+  const top=ranked[0], max=Math.max(1,top.n);
+  const main=document.getElementById('heroMain');
+  if(top.n===0){
+    main.innerHTML =
+      `<div class="bigT" style="background:var(--faint)"><span class="lab">—</span></div>`+
+      `<div class="heroTxt"><div class="heroNone">No arrivals</div>`+
+      `<div class="small">this hour in the feed</div></div>`;
+  } else {
+    main.innerHTML =
+      `<div class="bigT" style="background:${COLOR[top.t]}">`+
+        `<span class="lab">${top.t}</span><span class="go">GO HERE</span></div>`+
+      `<div class="heroTxt"><div class="big" style="color:${COLOR[top.t]}">${top.n}</div>`+
+      `<div class="small">flights landing at <b>${top.t}</b> at ${hh}</div></div>`;
+  }
+  document.getElementById('heroRank').innerHTML = ranked.map((r,i)=>
+    `<div class="rk ${i===0&&r.n>0?'win':''}">`+
+      `<div class="nm" style="color:${COLOR[r.t]}">${r.t}</div>`+
+      `<div class="track"><div class="fill" style="width:${100*r.n/max}%;background:${COLOR[r.t]}"></div></div>`+
+      `<div class="ct">${r.n}</div></div>`).join('');
+}
+
+/* ---------- cards ---------- */
+function renderCards(){
+  const tot=dayTotals(), el=document.getElementById('cards'); el.innerHTML='';
+  TERMS.forEach(t=>{
+    const on=selected.has(t), d=document.createElement('div');
+    d.className=`card ${CLS[t]} ${on?'on':'off'}`;
+    d.innerHTML=`<div class="lab">${t}</div><div class="num">${tot[t]}</div><div class="bar"></div>`;
+    d.onclick=()=>{ if(on){ if(selected.size>1) selected.delete(t);} else selected.add(t);
+      renderTable(); renderCards(); renderOrigins(); };
+    el.appendChild(d);
+  });
+  const g=document.createElement('div'); g.className='card total';
+  g.innerHTML=`<div class="lab">TOTAL</div><div class="num">${FLIGHTS.length}</div><div class="bar"></div>`;
+  el.appendChild(g);
+}
+
+/* ---------- table ---------- */
+function renderTable(){
+  const cols=activeTerms();
+  const grid={}; for(let h=0;h<24;h++){grid[h]={};cols.forEach(c=>grid[h][c]=0);}
+  FLIGHTS.forEach(f=>{ if(selected.has(f.terminal)) grid[f.hour][f.terminal]++; });
+  let maxCell=1; for(let h=0;h<24;h++)cols.forEach(c=>maxCell=Math.max(maxCell,grid[h][c]));
+  document.getElementById('thead').style.cssText=gridClass(cols.length);
+  document.getElementById('thead').innerHTML=
+    `<div class="h">Hour</div>`+cols.map(c=>`<div>${c}</div>`).join('')+`<div>Σ</div>`;
+  const tb=document.getElementById('tbody'); tb.innerHTML='';
+  for(let h=0;h<24;h++){
+    let tot=0; cols.forEach(c=>tot+=grid[h][c]);
+    const isNow=(h===NOW_H), row=document.createElement('div');
+    row.className=`trow ${tot===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
+    row.style.cssText=gridClass(cols.length);
+    const hh=String(h).padStart(2,'0')+':00';
+    const cells=cols.map(c=>{ const n=grid[h][c];
+      const a=n?Math.round((10+55*n/maxCell)):0;
+      const bg=n?`style="background:color-mix(in srgb, ${COLOR[c]} ${a}%, transparent)"`:'';
+      return `<div class="cell ${n?'':'z'}"><span class="heat" ${bg}>${n||'·'}</span></div>`;}).join('');
+    row.innerHTML=`<div class="h"><span class="chev">▶</span>${hh}${isNow?' <span class="nowchip">NOW</span>':''}</div>`
+      +cells+`<div class="tot">${tot||'·'}</div>`;
+    row.onclick=()=>{ openHour=(openHour===h?null:h); renderTable(); };
+    tb.appendChild(row);
+    if(openHour===h){ const det=document.createElement('div'); det.className='detail show';
+      det.appendChild(originList(h)); tb.appendChild(det); }
+  }
+  document.getElementById('rangeNote').textContent=
+    cols.length===TERMS.length?'all terminals':cols.join(' · ');
+}
+function originList(h){
+  const box=document.createElement('div');
+  const items=FLIGHTS.filter(f=>f.hour===h && selected.has(f.terminal));
+  if(!items.length){ box.innerHTML='<div class="none">No arrivals this hour.</div>'; return box; }
+  const map=new Map();
+  items.forEach(f=>{ const k=f.city+'|'+f.terminal;
+    if(!map.has(k)) map.set(k,{city:f.city,code:f.code,terminal:f.terminal,n:0}); map.get(k).n++; });
+  [...map.values()].sort((a,b)=>b.n-a.n||a.city.localeCompare(b.city)).forEach(o=>{
+    const r=document.createElement('div'); r.className='orow';
+    r.innerHTML=`<span class="odot" style="background:${COLOR[o.terminal]}"></span>`+
+      `<span class="ocity">${o.city}${o.n>1?` <span class="ocode">×${o.n}</span>`:''}</span>`+
+      `<span class="ocode">${o.code||''}</span>`+
+      `<span class="oterm" style="color:${COLOR[o.terminal]};background:color-mix(in srgb,${COLOR[o.terminal]} 16%,transparent)">${o.terminal}</span>`;
+    box.appendChild(r);
+  });
+  return box;
+}
+
+/* ---------- top origins (collapsed by default) ---------- */
+function renderOrigins(){
+  const map=new Map();
+  FLIGHTS.forEach(f=>{ if(!selected.has(f.terminal))return;
+    if(!map.has(f.city)) map.set(f.city,{city:f.city,code:f.code,n:0}); map.get(f.city).n++; });
+  const list=[...map.values()].sort((a,b)=>b.n-a.n).slice(0,10);
+  const max=list.length?list[0].n:1, el=document.getElementById('origins'); el.innerHTML='';
+  list.forEach((o,i)=>{ const d=document.createElement('div'); d.className='obar';
+    d.innerHTML=`<div class="fill" style="width:${Math.max(5,100*o.n/max)}%;background:color-mix(in srgb,var(--t2) 20%,transparent)"></div>`+
+      `<div class="lbl"><div><span class="rk2">${i+1}</span><span class="nm">${o.city}`+
+      `<small>${o.code||''}</small></span></div><div class="ct">${o.n}</div></div>`;
+    el.appendChild(d); });
+}
+
+/* ---------- boot ---------- */
+function wireControls(){
+  document.getElementById('segNow').onclick=()=>{heroWhen='now';syncSeg();renderHero();};
+  document.getElementById('segNext').onclick=()=>{heroWhen='next';syncSeg();renderHero();};
+  const origToggle=document.getElementById('origToggle'), origBox=document.getElementById('origins');
+  origToggle.onclick=()=>{ const open=origBox.classList.toggle('show'); origToggle.classList.toggle('open',open); };
+  document.getElementById('resetBtn').onclick=()=>{ selected=new Set(TERMS); openHour=null;
+    renderTable(); renderCards(); renderOrigins(); };
+}
+function syncSeg(){ document.getElementById('segNow').classList.toggle('on',heroWhen==='now');
+  document.getElementById('segNext').classList.toggle('on',heroWhen==='next'); }
+
+function boot(data){
+  FLIGHTS=data.flights||[]; TERMS=data.terminals||['T1','T2','T3','T4']; META=data.meta||{};
+  NOW_H=madridHour();
+  selected=new Set(TERMS);
+  document.getElementById('updated').textContent = META.updated ? `· ${META.updated}` : '';
+  document.getElementById('count').textContent = FLIGHTS.length;
+  document.getElementById('state').style.display='none';
+  document.getElementById('app').style.display='block';
+  wireControls();
+  renderHero(); renderCards(); renderTable(); renderOrigins();
+}
+function fail(){
+  document.getElementById('state').innerHTML =
+    `<div class="big">Couldn't load arrivals data.</div>`+
+    `<div style="margin-top:6px">Please check your connection.</div>`+
+    `<button class="rt" onclick="location.reload()">↻ Try again</button>`;
+}
+
+fetch('data.json?_='+Date.now(), {cache:'no-store'})
+  .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(boot)
+  .catch(fail);
+
+// Reload every 5 min to pick up the latest data.json.
+setTimeout(()=>location.reload(), 5*60*1000);
+</script>
+</body>
+</html>
