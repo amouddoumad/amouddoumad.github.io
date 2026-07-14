@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 
 # ---- airport ----
@@ -123,11 +124,15 @@ def scrape_airport():
 
 # ---------------- train ----------------
 def scrape_trains():
+    """Return (trains, status_note). The note is surfaced in data.json for debugging
+    (e.g. distinguishing an IP block from a parse miss when run from CI)."""
     try:
         html = _fetch(ATOCHA_URL)
+    except urllib.error.HTTPError as e:
+        return [], f"http_{e.code}"
     except Exception as e:  # noqa: BLE001
         print(f"  atocha: FAILED ({e})", file=sys.stderr)
-        return []
+        return [], f"err_{type(e).__name__}"
     out = []
     for chunk in _TRAIN_ROW_RE.findall(html):
         mt = _T_TIME_RE.search(chunk)
@@ -143,7 +148,10 @@ def scrape_trains():
             "number": (num.group(1) if num else ""),
             "city": city,
         })
-    return out
+    note = f"ok_{len(out)}" if out else (
+        f"parsed0_len{len(html)}_tt{int('TrainTrip' in html)}"
+        f"_cf{int('cf-' in html.lower() or 'just a moment' in html.lower())}")
+    return out, note
 
 
 def _merge_trains(base, new):
@@ -178,7 +186,7 @@ def main():
     # Trains: accumulate across runs; reset when the day changes.
     same_day = today is not None and prev_meta.get("day") == today
     base_trains = prev.get("trains", []) if same_day else []
-    new_trains = scrape_trains()
+    new_trains, train_note = scrape_trains()
     trains = _merge_trains(base_trains, new_trains)
     if not trains and base_trains:
         trains = base_trains  # atocha fetch failed; keep what we had
@@ -193,6 +201,7 @@ def main():
             "current_hour": clock[0] if clock else prev_meta.get("current_hour", -1),
             "updated": clock[1] if clock else prev_meta.get("updated", time.strftime("%d %b, %H:%M")),
             "day": today or "",
+            "train_status": train_note,
         },
     }
 
