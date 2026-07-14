@@ -11,13 +11,13 @@
     --bg:#0a0f1e; --bg2:#16223f; --card:#121c33; --card2:#0f1830; --line:#22304e;
     --ink:#eaf0ff; --muted:#8ba0c9; --faint:#43547a; --shadow:rgba(0,0,0,.35);
     --t1:#f2749f; --t2:#5aa9e6; --t3:#f4b942; --t4:#54cf88; --atocha:#2fd0c8;
-    --tot:#b79bff; --now:#ff6b57; --heroInk:#0a0f1e;
+    --cer:#b79bff; --tot:#b79bff; --now:#ff6b57; --heroInk:#0a0f1e;
   }
   :root[data-theme="light"]{
     --bg:#eef2f9; --bg2:#dbe6fb; --card:#ffffff; --card2:#f3f6fc; --line:#d9e1f0;
     --ink:#15233d; --muted:#5a6b85; --faint:#93a2bf; --shadow:rgba(30,50,90,.10);
     --t1:#d81b6a; --t2:#1d6fd0; --t3:#c07d00; --t4:#0f9d55; --atocha:#0e9d94;
-    --tot:#6b46d6; --now:#e23b1f; --heroInk:#ffffff;
+    --cer:#6b46d6; --tot:#6b46d6; --now:#e23b1f; --heroInk:#ffffff;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
@@ -73,56 +73,63 @@
   .rk .fill{position:absolute; left:0; top:0; bottom:0; border-radius:8px; min-width:3px; transition:width .3s}
   .rk .ct{text-align:right; font-weight:800; font-variant-numeric:tabular-nums; font-size:14px}
   .rk.win .nm,.rk.win .ct{font-size:15px}
+  .cerline{margin:14px 2px 0; padding-top:12px; border-top:1px dashed var(--line);
+    color:var(--muted); font-size:12.5px; font-weight:600}
+  .cerline b{color:var(--cer); font-size:14px}
 
   .hint{color:var(--faint); font-size:12px; margin:16px 2px 8px; letter-spacing:.2px; font-weight:600}
   .shead{display:flex; align-items:center; gap:8px; margin:26px 2px 12px; font-size:16px; font-weight:850}
   .shead .ic{font-size:19px}
-  .shead .tag{margin-left:auto; font-size:10.5px; font-weight:700; color:var(--faint); text-transform:none; letter-spacing:.2px}
+  .shead .tag{margin-left:auto; font-size:10.5px; font-weight:700; color:var(--faint); text-transform:none; letter-spacing:.2px; text-align:right}
 
-  /* ---------- day totals / filter cards (airport) ---------- */
-  .cards{display:grid; grid-template-columns:repeat(5,1fr); gap:7px; width:100%}
-  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 2px 10px;
+  /* ---------- airport terminal cards (day totals + filter) ---------- */
+  .cards{display:grid; gap:8px; width:100%}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 4px 11px;
     text-align:center; cursor:pointer; min-width:0; box-shadow:0 2px 8px var(--shadow);
     transition:transform .12s, border-color .15s, opacity .15s}
   .card:active{transform:scale(.95)}
-  .card .lab{font-size:11px; color:var(--muted); font-weight:800; letter-spacing:.3px}
-  .card .num{font-size:22px; font-weight:900; margin-top:2px; font-variant-numeric:tabular-nums}
-  .card .bar{height:3px; border-radius:3px; margin:7px auto 0; width:56%}
+  .card .lab{font-size:12px; color:var(--muted); font-weight:800; letter-spacing:.3px}
+  .card .num{font-size:26px; font-weight:900; margin-top:2px; font-variant-numeric:tabular-nums}
+  .card .pk{font-size:10.5px; color:var(--faint); font-weight:700; margin-top:2px}
+  .card .bar{height:3px; border-radius:3px; margin:8px auto 0; width:56%}
   .card.off{opacity:.34}
   .card.t1.on{border-color:var(--t1)} .card.t1 .num{color:var(--t1)} .card.t1 .bar{background:var(--t1)}
   .card.t2.on{border-color:var(--t2)} .card.t2 .num{color:var(--t2)} .card.t2 .bar{background:var(--t2)}
   .card.t3.on{border-color:var(--t3)} .card.t3 .num{color:var(--t3)} .card.t3 .bar{background:var(--t3)}
   .card.t4.on{border-color:var(--t4)} .card.t4 .num{color:var(--t4)} .card.t4 .bar{background:var(--t4)}
-  .card.total{cursor:default} .card.total .num{color:var(--tot)} .card.total .bar{background:var(--tot)}
 
   .stitle{font-size:12px; font-weight:800; letter-spacing:.5px; color:var(--muted);
     text-transform:uppercase; margin:16px 2px 10px; display:flex; justify-content:space-between; align-items:center}
   .stitle .mini{color:var(--faint); font-weight:700; letter-spacing:.2px; text-transform:none; font-size:11.5px}
 
-  /* ---------- airport hourly table ---------- */
+  /* ---------- unified hourly table (airport + Atocha) ---------- */
   .tbl{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 3px 14px var(--shadow)}
   .thead,.trow{display:grid; align-items:center}
-  .thead{background:var(--card2); color:var(--muted); font-size:11.5px; font-weight:800;
-    letter-spacing:.5px; text-align:center; padding:12px 0; border-radius:16px 16px 0 0}
-  .thead .h,.trow .h{text-align:left; padding-left:13px; white-space:nowrap}
+  .thead{background:var(--card2); color:var(--muted); font-size:11px; font-weight:800;
+    letter-spacing:.4px; text-align:center; padding:12px 0; border-radius:16px 16px 0 0}
+  .thead .h,.trow .h{text-align:left; padding-left:12px; white-space:nowrap}
+  .thead .ld{color:var(--atocha)} .thead .cer{color:var(--cer)}
   .trow{padding:13px 0; border-top:1px solid var(--line); cursor:pointer; font-variant-numeric:tabular-nums}
   .trow:last-child{border-radius:0 0 16px 16px}
   .trow:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
-  .trow .h{color:var(--muted); font-weight:750; font-size:15px; display:flex; align-items:center; gap:6px; overflow:visible}
-  .trow .cell{text-align:center; font-weight:750; font-size:15px}
+  .trow .h{color:var(--muted); font-weight:750; font-size:14.5px; display:flex; align-items:center; gap:5px; overflow:visible}
+  .trow .cell{text-align:center; font-weight:750; font-size:14.5px}
   .trow .cell.z{color:var(--faint)}
-  .trow .tot{text-align:center; color:var(--tot); font-weight:900; font-size:15px}
   .trow.empty{opacity:.5}
   .trow.now{background:color-mix(in srgb,var(--now) 14%,transparent); box-shadow:inset 4px 0 0 var(--now)}
   .trow.now .h{color:var(--ink); font-weight:900}
-  .nowchip{background:var(--now); color:#fff; font-size:8px; font-weight:900; letter-spacing:.4px;
-    padding:2px 5px; border-radius:5px; flex:none}
+  .nowchip{background:var(--now); color:#fff; font-size:7.5px; font-weight:900; letter-spacing:.3px;
+    padding:2px 4px; border-radius:5px; flex:none}
   .chev{color:var(--faint); font-size:10px; transition:transform .18s; display:inline-block}
   .trow.open .chev{transform:rotate(90deg)}
   .heat{display:inline-block; min-width:20px; padding:3px 5px; border-radius:8px}
+  .xrow{padding:11px 0; border-top:0; text-align:center; color:var(--faint); font-size:12.5px;
+    font-weight:750; cursor:pointer; letter-spacing:.2px}
+  .xrow:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+  .xrow + .trow{border-top:1px solid var(--line)}
 
-  .detail{display:none; padding:2px 14px 14px; background:color-mix(in srgb,var(--ink) 4%,transparent); border-top:1px solid var(--line)}
-  .detail.show{display:block}
+  .detail{padding:2px 14px 14px; background:color-mix(in srgb,var(--ink) 4%,transparent); border-top:1px solid var(--line)}
+  .dsec{color:var(--faint); font-size:10.5px; font-weight:850; letter-spacing:.6px; text-transform:uppercase; margin:12px 0 3px}
   .orow{display:flex; align-items:center; gap:9px; padding:8px 0; border-bottom:1px dashed var(--line)}
   .orow:last-child{border-bottom:0}
   .odot{width:9px;height:9px;border-radius:50%;flex:none}
@@ -131,22 +138,11 @@
   .ocode{color:var(--faint); font-size:11.5px; font-variant-numeric:tabular-nums}
   .oterm{font-size:11px; font-weight:800; padding:2px 7px; border-radius:6px; letter-spacing:.3px}
   .detail .none{color:var(--faint); font-size:13px; padding:8px 0}
-
-  /* ---------- Atocha hourly (bars) ---------- */
-  .abody{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 3px 14px var(--shadow)}
-  .abar{padding:11px 12px; border-top:1px solid var(--line); cursor:pointer; display:grid;
-    grid-template-columns:104px 1fr 30px; align-items:center; gap:10px}
-  .abar:first-child{border-top:0}
-  .abar:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
-  .abar .hl{color:var(--muted); font-weight:750; font-size:15px; display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:visible}
-  .abar .tk{position:relative; height:20px; background:var(--card2); border-radius:7px; overflow:hidden}
-  .abar .fl{position:absolute; left:0; top:0; bottom:0; border-radius:7px; background:var(--atocha)}
-  .abar .c{text-align:right; font-weight:800; font-variant-numeric:tabular-nums; font-size:15px}
-  .abar.empty{opacity:.45}
-  .abar.now{background:color-mix(in srgb,var(--now) 14%,transparent); box-shadow:inset 4px 0 0 var(--now)}
-  .abar.now .hl{color:var(--ink); font-weight:900}
-  .adet{display:none; padding:2px 14px 14px; background:color-mix(in srgb,var(--ink) 4%,transparent); border-top:1px solid var(--line)}
-  .adet.show{display:block}
+  .lchips{display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 2px}
+  .lchip{font-size:12px; font-weight:800; padding:4px 9px; border-radius:8px; color:var(--cer);
+    background:color-mix(in srgb,var(--cer) 14%,transparent)}
+  .lchip small{font-weight:700; opacity:.75}
+  .rtnote{color:var(--faint); font-size:11.5px; font-weight:600; padding:6px 0 0}
 
   /* ---------- collapsible origins ---------- */
   .collapse{width:100%; display:flex; align-items:center; justify-content:space-between;
@@ -170,6 +166,20 @@
     background:var(--card); border:1px solid var(--line); color:var(--ink); padding:14px;
     border-radius:13px; font-size:14px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px var(--shadow)}
   .btn:active{transform:scale(.97)}
+
+  /* ---------- sources ---------- */
+  .srcs{display:grid; gap:8px}
+  .src{display:flex; gap:11px; align-items:flex-start; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:12px 14px; box-shadow:0 2px 8px var(--shadow)}
+  .src .sic{flex:none; font-size:17px; margin-top:1px}
+  .src .st{font-size:13.5px; font-weight:800}
+  .src .st a{color:inherit; text-decoration:none; border-bottom:1px dotted var(--faint)}
+  .src .sd{color:var(--muted); font-size:12px; margin-top:2px; line-height:1.5}
+  .src .badge{font-size:9px; font-weight:900; letter-spacing:.5px; padding:2.5px 7px; border-radius:6px; vertical-align:2px; margin-left:6px}
+  .badge.blive{color:var(--t4); background:color-mix(in srgb,var(--t4) 15%,transparent)}
+  .badge.bsched{color:var(--t3); background:color-mix(in srgb,var(--t3) 15%,transparent)}
+  .badge.brt{color:var(--cer); background:color-mix(in srgb,var(--cer) 15%,transparent)}
+
   .foot{color:var(--muted); font-size:11.5px; margin:20px 4px 0; line-height:1.6}
   .foot a{color:var(--t2)}
 
@@ -214,51 +224,45 @@
       </div>
       <div class="winner" id="heroWinner"></div>
       <div class="rank" id="heroRank"></div>
+      <div class="cerline" id="heroCer" style="display:none"></div>
     </div>
 
-    <!-- AIRPORT -->
+    <!-- AIRPORT terminal totals -->
     <div class="shead"><span class="ic">🛬</span> Aeropuerto — por terminal
-      <span class="tag" id="airTag"></span></div>
-    <div class="hint" style="margin-top:0">Totales del día — toca una terminal para filtrar</div>
+      <span class="tag">totales del día · toca para filtrar</span></div>
     <div class="cards" id="cards"></div>
-    <div class="stitle">Llegadas por hora <span class="mini" id="airRange"></span></div>
+
+    <!-- UNIFIED hourly table -->
+    <div class="shead"><span class="ic">🕐</span> Llegadas por hora
+      <span class="tag" id="tblTag">aeropuerto + Atocha</span></div>
     <div class="tbl"><div class="thead" id="airThead"></div><div id="airBody"></div></div>
-    <div class="hint" style="margin-top:9px">Toca una hora para ver el origen de los vuelos</div>
+    <div class="hint" style="margin-top:9px">Toca una hora para ver el detalle (vuelos y trenes)</div>
+
     <button class="collapse" id="airOrigToggle"><span>🌍 Principales orígenes (avión)</span><span class="ar">▾</span></button>
     <div class="orig" id="airOrigins"></div>
-
-    <!-- ATOCHA -->
-    <div class="shead"><span class="ic">🚆</span> Atocha — trenes por hora
-      <span class="tag">larga distancia · horario</span></div>
-    <div class="stitle">Trenes por hora <span class="mini" id="trTotal"></span></div>
-    <div class="abody" id="atoBody"></div>
-    <div class="hint" style="margin-top:9px">Toca una hora para ver el origen de los trenes</div>
-    <button class="collapse" id="trOrigToggle"><span>🌍 Principales orígenes (tren)</span><span class="ar">▾</span></button>
+    <button class="collapse" id="trOrigToggle"><span>🚄 Principales orígenes (tren LD)</span><span class="ar">▾</span></button>
     <div class="orig" id="trOrigins"></div>
 
     <div class="btnrow">
-      <button class="btn" onclick="location.reload()">↻ Actualizar</button>
+      <button class="btn" id="refreshBtn">↻ Actualizar</button>
       <button class="btn" id="resetBtn">◱ Todas las terminales</button>
     </div>
 
+    <!-- SOURCES -->
+    <div class="shead"><span class="ic">📡</span> Fuentes de datos</div>
+    <div class="srcs" id="srcs"></div>
+
     <p class="foot">
-      Aeropuerto: llegadas en vivo de <a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>
-      (día completo). Atocha: <b>horario programado</b> de llegadas de larga distancia (AVE/Alvia/Avlo/Avant)
-      de los datos abiertos de Renfe — es el horario, no el tiempo real. <b>Cercanías próximamente.</b>
-      La <b>T4</b> incluye el satélite T4S. Actualización automática cada ~10 min.<br>
+      La <b>T4</b> incluye el satélite T4S. La hora actual se calcula en tu dispositivo (hora de Madrid).
+      Datos de trenes © Renfe (datos abiertos, CC-BY 4.0). Actualización automática cada ~10 min.<br>
       <span id="counts"></span>
     </p>
   </div>
 </div>
 
 <script>
-const COLOR={T1:'var(--t1)',T2:'var(--t2)',T3:'var(--t3)',T4:'var(--t4)',ATO:'var(--atocha)'};
+const COLOR={T1:'var(--t1)',T2:'var(--t2)',T3:'var(--t3)',T4:'var(--t4)',ATO:'var(--atocha)',CER:'var(--cer)'};
 const CLS={T1:'t1',T2:'t2',T3:'t3',T4:'t4'};
-const ENT=[
-  {k:'T1',short:'T1',name:'Terminal T1'},{k:'T2',short:'T2',name:'Terminal T2'},
-  {k:'T3',short:'T3',name:'Terminal T3'},{k:'T4',short:'T4',name:'Terminal T4'},
-  {k:'ATO',short:'🚆',name:'Atocha (tren)'},
-];
 const MONTHS_ES={Jan:'ene',Feb:'feb',Mar:'mar',Apr:'abr',May:'may',Jun:'jun',
   Jul:'jul',Aug:'ago',Sep:'sep',Oct:'oct',Nov:'nov',Dec:'dic'};
 const esDate=s=>s?s.replace(/\b([A-Z][a-z]{2})\b/,m=>MONTHS_ES[m]||m):'';
@@ -270,123 +274,157 @@ applyTheme(localStorage.getItem('mad-theme')||(matchMedia('(prefers-color-scheme
 tbtn.onclick=()=>{ const t=root.dataset.theme==='light'?'dark':'light'; localStorage.setItem('mad-theme',t); applyTheme(t); };
 
 /* data + state */
-let FLIGHTS=[],TRAINS=[],TERMS=[],META={},NOW_H=-1;
-let selected=new Set(),airOpen=null,atoOpen=null,heroWhen='now';
+let FLIGHTS=[],TRAINS=[],CER=[],CER_RT={},TERMS=[],ACT=[],META={},NOW_H=-1;
+let selected=new Set(),openHour=null,pastOpen=false,heroWhen='now',BOOTED=false;
 
 function madridHour(){
   try{ const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',hour:'2-digit',hour12:false}).formatToParts(new Date());
     const h=parseInt(p.find(x=>x.type==='hour').value,10); return isNaN(h)?-1:(h%24);
   }catch(e){ return (typeof META.current_hour==='number')?META.current_hour:-1; }
 }
-const flightsAt=(h,term)=>FLIGHTS.filter(f=>f.hour===h&&f.terminal===term).length;
+const dayTotals=()=>{ const t={}; TERMS.forEach(x=>t[x]=0); FLIGHTS.forEach(f=>{ if(f.terminal in t)t[f.terminal]++; }); return t; };
+const activeTerms=()=>ACT.filter(t=>selected.has(t));
 const trainsAt=h=>TRAINS.filter(t=>t.hour===h).length;
-function entityCounts(h){ const c={}; ENT.forEach(e=>c[e.k]= e.k==='ATO'?trainsAt(h):flightsAt(h,e.k)); return c; }
-const dayTotals=()=>{ const t={}; TERMS.forEach(x=>t[x]=0); FLIGHTS.forEach(f=>t[f.terminal]++); return t; };
-const activeTerms=()=>TERMS.filter(t=>selected.has(t));
+const hh=h=>String(h).padStart(2,'0')+':00';
+
+/* Cercanías: apply the GTFS-RT delay/cancellation map to the cached schedule.
+   Bucket per effective (delay-shifted) hour; cancellations counted at their scheduled hour. */
+function cerHours(){
+  const out=Array.from({length:24},()=>({n:0,lines:{},del:0,can:0}));
+  CER.forEach(c=>{
+    const d=CER_RT[c.t];
+    if(d==='X'){ out[c.h].can++; return; }
+    const add=(typeof d==='number')?d:0;
+    const h=(((Math.floor((c.h*60+c.m+add)/60))%24)+24)%24;
+    const b=out[h]; b.n++; b.lines[c.l]=(b.lines[c.l]||0)+1; if(add>=5)b.del++;
+  });
+  return out;
+}
+let CERH=null; // recomputed on every render pass
 
 /* ---------- HERO ---------- */
 function renderHero(){
   const base=NOW_H>=0?NOW_H:12, h=heroWhen==='now'?base:(base+1)%24;
-  const hh=String(h).padStart(2,'0')+':00';
-  document.getElementById('heroCap').textContent = heroWhen==='now'?`¿Dónde ir ahora? · ${hh}`:`¿Dónde ir? · próxima ${hh}`;
-  const counts=entityCounts(h);
-  const ranked=ENT.map(e=>({...e,n:counts[e.k]})).sort((a,b)=>b.n-a.n);
-  const top=ranked[0], max=Math.max(1,top.n);
+  document.getElementById('heroCap').textContent = heroWhen==='now'?`¿Dónde ir ahora? · ${hh(h)}`:`¿Dónde ir? · próxima ${hh(h)}`;
+  const ent=ACT.map(t=>({k:t,short:t,name:'Terminal '+t,n:FLIGHTS.filter(f=>f.hour===h&&f.terminal===t).length}));
+  ent.push({k:'ATO',short:'🚆',name:'Atocha (tren)',n:trainsAt(h)});
+  const ranked=ent.sort((a,b)=>b.n-a.n), top=ranked[0], max=Math.max(1,top.n);
   const w=document.getElementById('heroWinner');
   if(top.n===0){
     w.innerHTML=`<div class="wtile" style="background:var(--faint)"><span class="lab">—</span></div>`+
-      `<div class="wtxt"><div class="none">Sin llegadas</div><div class="small">a las ${hh}</div></div>`;
+      `<div class="wtxt"><div class="none">Sin llegadas</div><div class="small">a las ${hh(h)}</div></div>`;
   }else{
     w.innerHTML=`<div class="wtile" style="background:${COLOR[top.k]}"><span class="lab">${top.short}</span><span class="go">VE AQUÍ</span></div>`+
       `<div class="wtxt"><div class="big" style="color:${COLOR[top.k]}">${top.n}</div>`+
-      `<div class="small">llegadas a <b>${top.name}</b> a las ${hh}</div></div>`;
+      `<div class="small">llegadas a <b>${top.name}</b> a las ${hh(h)}</div></div>`;
   }
   document.getElementById('heroRank').innerHTML=ranked.map((r,i)=>
     `<div class="rk ${i===0&&r.n>0?'win':''}"><div class="nm" style="color:${COLOR[r.k]}">${r.k==='ATO'?'Atocha':r.k}</div>`+
     `<div class="track"><div class="fill" style="width:${100*r.n/max}%;background:${COLOR[r.k]}"></div></div>`+
     `<div class="ct">${r.n}</div></div>`).join('');
+  const cl=document.getElementById('heroCer');
+  if(CER.length){
+    cl.style.display='block';
+    cl.innerHTML=`🚈 Cercanías Atocha: <b>${CERH[h].n}</b> llegadas a las ${hh(h)} — se muestra aparte (poco taxi)`;
+  }else cl.style.display='none';
 }
 
-/* ---------- airport cards + table ---------- */
+/* ---------- terminal cards ---------- */
 function renderCards(){
-  const tot=dayTotals(), el=document.getElementById('cards'); el.innerHTML='';
-  TERMS.forEach(t=>{ const on=selected.has(t), d=document.createElement('div');
+  const tot=dayTotals(), el=document.getElementById('cards');
+  el.style.gridTemplateColumns=`repeat(${Math.max(ACT.length,1)},1fr)`;
+  el.innerHTML='';
+  ACT.forEach(t=>{
+    const on=selected.has(t), d=document.createElement('div');
+    const byH=Array.from({length:24},(_,h)=>FLIGHTS.filter(f=>f.hour===h&&f.terminal===t).length);
+    const pk=byH.indexOf(Math.max(...byH));
     d.className=`card ${CLS[t]} ${on?'on':'off'}`;
-    d.innerHTML=`<div class="lab">${t}</div><div class="num">${tot[t]}</div><div class="bar"></div>`;
+    d.innerHTML=`<div class="lab">${t}</div><div class="num">${tot[t]}</div><div class="pk">pico ${hh(pk)}</div><div class="bar"></div>`;
     d.onclick=()=>{ if(on){ if(selected.size>1) selected.delete(t);} else selected.add(t);
-      renderAirTable(); renderCards(); renderAirOrigins(); };
-    el.appendChild(d); });
-  const g=document.createElement('div'); g.className='card total';
-  g.innerHTML=`<div class="lab">TOTAL</div><div class="num">${FLIGHTS.length}</div><div class="bar"></div>`;
-  el.appendChild(g);
+      renderTable(); renderCards(); renderAirOrigins(); };
+    el.appendChild(d);
+  });
 }
-const airGrid=n=>`grid-template-columns:82px repeat(${n},1fr) 38px`;
-function renderAirTable(){
-  const cols=activeTerms();
+
+/* ---------- unified hourly table ---------- */
+const gridCss=n=>`grid-template-columns:88px repeat(${n},1fr)`;
+function renderTable(){
+  const cols=activeTerms(), hasCer=CER.length>0;
+  const n=cols.length+1+(hasCer?1:0);
   const grid={}; for(let h=0;h<24;h++){grid[h]={};cols.forEach(c=>grid[h][c]=0);}
   FLIGHTS.forEach(f=>{ if(selected.has(f.terminal)) grid[f.hour][f.terminal]++; });
-  let mx=1; for(let h=0;h<24;h++)cols.forEach(c=>mx=Math.max(mx,grid[h][c]));
-  document.getElementById('airThead').style.cssText=airGrid(cols.length);
-  document.getElementById('airThead').innerHTML=`<div class="h">Hora</div>`+cols.map(c=>`<div>${c}</div>`).join('')+`<div>Σ</div>`;
+  const mxT={}; cols.forEach(c=>{ mxT[c]=1; for(let h=0;h<24;h++)mxT[c]=Math.max(mxT[c],grid[h][c]); });
+  let mxLD=1,mxCer=1; for(let h=0;h<24;h++){ mxLD=Math.max(mxLD,trainsAt(h)); if(hasCer)mxCer=Math.max(mxCer,CERH[h].n); }
+  const heat=(v,mx,col)=>{ const a=v?Math.round(10+55*v/mx):0;
+    return `<div class="cell ${v?'':'z'}"><span class="heat" ${v?`style="background:color-mix(in srgb, ${col} ${a}%, transparent)"`:''}>${v||'·'}</span></div>`; };
+  const th=document.getElementById('airThead');
+  th.style.cssText=gridCss(n);
+  th.innerHTML=`<div class="h">Hora</div>`+cols.map(c=>`<div>${c}</div>`).join('')+
+    `<div class="ld">AVE·LD</div>`+(hasCer?`<div class="cer">CERC</div>`:'');
   const tb=document.getElementById('airBody'); tb.innerHTML='';
-  for(let h=0;h<24;h++){
-    let tot=0; cols.forEach(c=>tot+=grid[h][c]);
-    const isNow=(h===NOW_H), row=document.createElement('div');
-    row.className=`trow ${tot===0?'empty':''} ${isNow?'now':''} ${airOpen===h?'open':''}`;
-    row.style.cssText=airGrid(cols.length);
-    const hh=String(h).padStart(2,'0')+':00';
-    const cells=cols.map(c=>{ const n=grid[h][c], a=n?Math.round(10+55*n/mx):0;
-      const bg=n?`style="background:color-mix(in srgb, ${COLOR[c]} ${a}%, transparent)"`:'';
-      return `<div class="cell ${n?'':'z'}"><span class="heat" ${bg}>${n||'·'}</span></div>`;}).join('');
-    row.innerHTML=`<div class="h"><span class="chev">▶</span>${hh}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`+cells+`<div class="tot">${tot||'·'}</div>`;
-    row.onclick=()=>{ airOpen=(airOpen===h?null:h); renderAirTable(); };
-    tb.appendChild(row);
-    if(airOpen===h){ const d=document.createElement('div'); d.className='detail show'; d.appendChild(flightOrigins(h)); tb.appendChild(d); }
+  const past=NOW_H>0?NOW_H:0;
+  if(past>0){
+    const x=document.createElement('div'); x.className='xrow';
+    x.textContent=pastOpen?`▾ Ocultar horas anteriores`:`▸ Ver ${past} hora${past>1?'s':''} anterior${past>1?'es':''}`;
+    x.onclick=()=>{ pastOpen=!pastOpen; renderTable(); };
+    tb.appendChild(x);
   }
-  document.getElementById('airRange').textContent=cols.length===TERMS.length?'todas las terminales':cols.join(' · ');
-}
-function flightOrigins(h){
-  const box=document.createElement('div');
-  const items=FLIGHTS.filter(f=>f.hour===h&&selected.has(f.terminal));
-  if(!items.length){ box.innerHTML='<div class="none">Sin llegadas esta hora.</div>'; return box; }
-  const map=new Map();
-  items.forEach(f=>{ const k=f.city+'|'+f.terminal; if(!map.has(k)) map.set(k,{city:f.city,code:f.code,terminal:f.terminal,n:0}); map.get(k).n++; });
-  [...map.values()].sort((a,b)=>b.n-a.n||a.city.localeCompare(b.city)).forEach(o=>{
-    const r=document.createElement('div'); r.className='orow';
-    r.innerHTML=`<span class="odot" style="background:${COLOR[o.terminal]}"></span>`+
-      `<span class="ocity">${o.city}${o.n>1?` <span class="ocode">×${o.n}</span>`:''}</span>`+
-      `<span class="ocode">${o.code||''}</span>`+
-      `<span class="oterm" style="color:${COLOR[o.terminal]};background:color-mix(in srgb,${COLOR[o.terminal]} 16%,transparent)">${o.terminal}</span>`;
-    box.appendChild(r); });
-  return box;
+  for(let h=0;h<24;h++){
+    if(h<past && !pastOpen) continue;
+    let tot=0; cols.forEach(c=>tot+=grid[h][c]);
+    const ld=trainsAt(h), cer=hasCer?CERH[h].n:0;
+    const isNow=(h===NOW_H), row=document.createElement('div');
+    row.className=`trow ${(tot+ld+cer)===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
+    row.style.cssText=gridCss(n);
+    row.innerHTML=`<div class="h">${isNow?'':'<span class="chev">▶</span>'}${hh(h)}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`+
+      cols.map(c=>heat(grid[h][c],mxT[c],COLOR[c])).join('')+
+      heat(ld,mxLD,COLOR.ATO)+(hasCer?heat(cer,mxCer,COLOR.CER):'');
+    row.onclick=()=>{ openHour=(openHour===h?null:h); renderTable(); };
+    tb.appendChild(row);
+    if(openHour===h){ const d=document.createElement('div'); d.className='detail'; d.appendChild(detailFor(h)); tb.appendChild(d); }
+  }
+  document.getElementById('tblTag').textContent=
+    (cols.length===ACT.length?'todas las terminales':cols.join('·'))+' + Atocha';
 }
 
-/* ---------- Atocha hourly bars ---------- */
-function renderAtocha(){
-  const by={}; for(let h=0;h<24;h++)by[h]=0; TRAINS.forEach(t=>by[t.hour]++);
-  let mx=1; for(let h=0;h<24;h++)mx=Math.max(mx,by[h]);
-  const el=document.getElementById('atoBody'); el.innerHTML='';
-  for(let h=0;h<24;h++){
-    const n=by[h], isNow=(h===NOW_H), row=document.createElement('div');
-    row.className=`abar ${n===0?'empty':''} ${isNow?'now':''}`;
-    const hh=String(h).padStart(2,'0')+':00';
-    row.innerHTML=`<div class="hl"><span class="chev">▶</span>${hh}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`+
-      `<div class="tk"><div class="fl" style="width:${n?Math.max(4,100*n/mx):0}%"></div></div>`+
-      `<div class="c">${n||'·'}</div>`;
-    row.onclick=()=>{ atoOpen=(atoOpen===h?null:h); renderAtocha(); };
-    el.appendChild(row);
-    if(atoOpen===h){ const d=document.createElement('div'); d.className='adet show'; d.appendChild(trainList(h)); el.appendChild(d); }
-  }
-  document.getElementById('trTotal').textContent=`${TRAINS.length} hoy`;
-}
-function trainList(h){
+/* hour detail: flights + LD trains + Cercanías lines */
+function detailFor(h){
   const box=document.createElement('div');
-  const items=TRAINS.filter(t=>t.hour===h).sort((a,b)=>a.city.localeCompare(b.city));
-  if(!items.length){ box.innerHTML='<div class="none">Sin trenes registrados esta hora.</div>'; return box; }
-  items.forEach(t=>{ const r=document.createElement('div'); r.className='orow';
+  const sec=t=>{ const s=document.createElement('div'); s.className='dsec'; s.textContent=t; return s; };
+  const fl=FLIGHTS.filter(f=>f.hour===h&&selected.has(f.terminal));
+  box.appendChild(sec(`✈ Vuelos · ${fl.length}`));
+  if(!fl.length){ box.insertAdjacentHTML('beforeend','<div class="none">Sin vuelos esta hora.</div>'); }
+  else{
+    const map=new Map();
+    fl.forEach(f=>{ const k=f.city+'|'+f.terminal; if(!map.has(k)) map.set(k,{city:f.city,code:f.code,terminal:f.terminal,n:0}); map.get(k).n++; });
+    [...map.values()].sort((a,b)=>b.n-a.n||a.city.localeCompare(b.city)).forEach(o=>{
+      const r=document.createElement('div'); r.className='orow';
+      r.innerHTML=`<span class="odot" style="background:${COLOR[o.terminal]}"></span>`+
+        `<span class="ocity">${o.city}${o.n>1?` <span class="ocode">×${o.n}</span>`:''}</span>`+
+        `<span class="ocode">${o.code||''}</span>`+
+        `<span class="oterm" style="color:${COLOR[o.terminal]};background:color-mix(in srgb,${COLOR[o.terminal]} 16%,transparent)">${o.terminal}</span>`;
+      box.appendChild(r); });
+  }
+  const ld=TRAINS.filter(t=>t.hour===h).sort((a,b)=>a.city.localeCompare(b.city));
+  box.appendChild(sec(`🚄 Larga distancia · ${ld.length}`));
+  if(!ld.length){ box.insertAdjacentHTML('beforeend','<div class="none">Sin trenes LD esta hora.</div>'); }
+  else ld.forEach(t=>{ const r=document.createElement('div'); r.className='orow';
     r.innerHTML=`<span class="otype" style="color:var(--atocha);background:color-mix(in srgb,var(--atocha) 16%,transparent)">${t.type}</span>`+
       `<span class="ocity">${t.city}</span>`+`<span class="ocode">${t.number||''}</span>`;
     box.appendChild(r); });
+  if(CER.length){
+    const b=CERH[h];
+    box.appendChild(sec(`🚈 Cercanías · ${b.n}`));
+    if(!b.n){ box.insertAdjacentHTML('beforeend','<div class="none">Sin cercanías esta hora.</div>'); }
+    else{
+      const chips=document.createElement('div'); chips.className='lchips';
+      Object.entries(b.lines).sort((a,b2)=>b2[1]-a[1]).forEach(([l,c])=>{
+        chips.insertAdjacentHTML('beforeend',`<span class="lchip">${l} <small>×${c}</small></span>`); });
+      box.appendChild(chips);
+      const notes=[]; if(b.del)notes.push(`${b.del} con retraso ≥5 min`); if(b.can)notes.push(`${b.can} cancelado${b.can>1?'s':''}`);
+      if(notes.length) box.insertAdjacentHTML('beforeend',`<div class="rtnote">⏱ ${notes.join(' · ')}</div>`);
+    }
+  }
   return box;
 }
 
@@ -404,31 +442,77 @@ function topOrigins(items, el, colorVar){
 function renderAirOrigins(){ topOrigins(FLIGHTS.filter(f=>selected.has(f.terminal)), document.getElementById('airOrigins'), 'var(--t2)'); }
 function renderTrOrigins(){ topOrigins(TRAINS, document.getElementById('trOrigins'), 'var(--atocha)'); }
 
-/* ---------- boot ---------- */
-function seg(){ document.getElementById('segNow').classList.toggle('on',heroWhen==='now'); document.getElementById('segNext').classList.toggle('on',heroWhen==='next'); }
-function collapse(btnId, boxId){ const b=document.getElementById(btnId), x=document.getElementById(boxId);
-  b.onclick=()=>{ const o=x.classList.toggle('show'); b.classList.toggle('open',o); }; }
+/* ---------- sources ---------- */
+function renderSources(){
+  const rtOk=String(META.cer_rt_status||'').startsWith('ok');
+  const nrt=Object.keys(CER_RT).length;
+  const rows=[
+    {ic:'✈️',badge:'<span class="badge blive">EN VIVO</span>',
+     t:'<a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>',
+     d:'Tablón de llegadas del aeropuerto, día completo por terminal. Se actualiza en cada refresco (~10 min).'},
+    {ic:'🚄',badge:'<span class="badge bsched">HORARIO</span>',
+     t:'Renfe datos abiertos — <a href="https://data.renfe.com/">GTFS AV/LD</a>',
+     d:'Horario oficial del día de larga distancia con destino final Atocha (AVE, Alvia, Avlo, Avant, Intercity). Sin retrasos en vivo.'},
+  ];
+  if(CER.length) rows.push(
+    {ic:'🚈',badge:rtOk?'<span class="badge brt">TIEMPO REAL</span>':'<span class="badge bsched">HORARIO</span>',
+     t:'Renfe Cercanías — <a href="https://data.renfe.com/">GTFS + GTFS-RT</a>',
+     d:'Todos los trenes que paran en Atocha-Cercanías. '+(rtOk
+        ?`Retrasos y cancelaciones en tiempo real (feed oficial, act. cada 20 s) — ${nrt} tren${nrt===1?'':'es'} con incidencia ahora.`
+        :'El feed de tiempo real no está disponible ahora mismo; se muestra el horario.')});
+  document.getElementById('srcs').innerHTML=rows.map(r=>
+    `<div class="src"><span class="sic">${r.ic}</span><div><div class="st">${r.t}${r.badge}</div><div class="sd">${r.d}</div></div></div>`).join('');
+}
 
-function boot(data){
-  FLIGHTS=data.flights||[]; TRAINS=data.trains||[]; TERMS=data.terminals||['T1','T2','T3','T4']; META=data.meta||{};
-  NOW_H=madridHour(); selected=new Set(TERMS);
+/* ---------- render / refresh ---------- */
+function renderAll(){
+  CERH=CER.length?cerHours():null;
+  renderHero(); renderCards(); renderTable(); renderAirOrigins(); renderTrOrigins(); renderSources();
   document.getElementById('updated').textContent=META.updated?`· ${esDate(META.updated)}`:'';
-  document.getElementById('counts').textContent=`${FLIGHTS.length} vuelos · ${TRAINS.length} trenes hoy.`;
-  document.getElementById('airTag').textContent='día completo';
-  document.getElementById('state').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('segNow').onclick=()=>{heroWhen='now';seg();renderHero();};
-  document.getElementById('segNext').onclick=()=>{heroWhen='next';seg();renderHero();};
-  collapse('airOrigToggle','airOrigins'); collapse('trOrigToggle','trOrigins');
-  document.getElementById('resetBtn').onclick=()=>{ selected=new Set(TERMS); airOpen=null; renderAirTable(); renderCards(); renderAirOrigins(); };
-  renderHero(); renderCards(); renderAirTable(); renderAtocha(); renderAirOrigins(); renderTrOrigins();
+  document.getElementById('counts').textContent=
+    `${FLIGHTS.length} vuelos · ${TRAINS.length} trenes LD · ${CER.length?CER.length+' cercanías':'cercanías n/d'} hoy.`;
+}
+function apply(data){
+  FLIGHTS=data.flights||[]; TRAINS=data.trains||[]; CER=data.cercanias||[]; CER_RT=data.cer_rt||{};
+  TERMS=data.terminals||['T1','T2','T3','T4']; META=data.meta||{};
+  NOW_H=madridHour();
+  const tot=dayTotals(); ACT=TERMS.filter(t=>tot[t]>0); if(!ACT.length)ACT=TERMS.slice();
+  selected=new Set([...selected].filter(t=>ACT.includes(t)));
+  if(!selected.size) selected=new Set(ACT);
+  renderAll();
+  if(!BOOTED){
+    BOOTED=true;
+    document.getElementById('state').style.display='none';
+    document.getElementById('app').style.display='block';
+  }
+}
+async function loadData(manual){
+  const btn=document.getElementById('refreshBtn');
+  if(manual){ btn.textContent='↻ Actualizando…'; }
+  try{
+    const r=await fetch('data.json?_='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw 0;
+    apply(await r.json());
+  }catch(e){ if(!BOOTED) fail(); }
+  if(manual){ setTimeout(()=>{ btn.textContent='↻ Actualizar'; },400); }
 }
 function fail(){ document.getElementById('state').innerHTML=
   `<div class="big">No se pudieron cargar los datos.</div><div style="margin-top:6px">Revisa tu conexión.</div>`+
   `<button class="rt" onclick="location.reload()">↻ Reintentar</button>`; }
 
-fetch('data.json?_='+Date.now(),{cache:'no-store'}).then(r=>{ if(!r.ok) throw 0; return r.json(); }).then(boot).catch(fail);
-setTimeout(()=>location.reload(), 5*60*1000);
+/* ---------- boot ---------- */
+function seg(){ document.getElementById('segNow').classList.toggle('on',heroWhen==='now'); document.getElementById('segNext').classList.toggle('on',heroWhen==='next'); }
+function collapse(btnId, boxId){ const b=document.getElementById(btnId), x=document.getElementById(boxId);
+  b.onclick=()=>{ const o=x.classList.toggle('show'); b.classList.toggle('open',o); }; }
+document.getElementById('segNow').onclick=()=>{heroWhen='now';seg();renderHero();};
+document.getElementById('segNext').onclick=()=>{heroWhen='next';seg();renderHero();};
+collapse('airOrigToggle','airOrigins'); collapse('trOrigToggle','trOrigins');
+document.getElementById('refreshBtn').onclick=()=>loadData(true);
+document.getElementById('resetBtn').onclick=()=>{ selected=new Set(ACT); openHour=null; renderCards(); renderTable(); renderAirOrigins(); };
+
+loadData(false);
+setInterval(()=>loadData(false), 5*60*1000);              // soft refresh — keeps scroll & state
+setInterval(()=>{ const h=madridHour(); if(BOOTED && h!==NOW_H){ NOW_H=h; renderAll(); } }, 30*1000);
 </script>
 </body>
 </html>

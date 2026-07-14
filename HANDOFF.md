@@ -77,6 +77,25 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
 - Filtered to **today's active services** via `calendar.txt` + `calendar_dates.txt`.
 - ~110–120 arrivals/day. **This is a timetable, not real-time** (no live delays/cancellations).
 
+### Cercanías (Atocha commuter) — SCHEDULED + REAL-TIME ✅
+- Schedule: **`https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip`**
+  (national Cercanías/Rodalies GTFS, ~15 MB, updated daily, works from CI with the browser UA).
+  ⚠️ The similarly-named `gtransit/Fichero_CERCANIAS/google_transit.zip` **does NOT contain
+  Madrid** (other nuclei only). CRTM's ArcGIS GTFS is a dead 2024 stub (empty stop_times).
+  NAP file 929 has the data but **requires login** — don't bother.
+- **Atocha Cercanías stop_id = `18000`.** We count ALL trains **stopping** there (through
+  station — passengers alight from through trains, unlike LD where only terminating trips
+  count). ~970 trains/day, lines C1–C10. Cached once per day like LD (`meta.cer_status`).
+- Real-time: **`https://gtfsrt.renfe.com/trip_updates.json`** (official Renfe GTFS-RT,
+  no auth, CC-BY, refreshed every 20 s). Its `tripId`s **match this GTFS's trip_ids
+  exactly**. Fetched on EVERY run into `cer_rt` (`{trip_id: delay_min | "X"=cancelled}`,
+  only delays ≥1 min kept). The FRONT END applies it to the cached schedule
+  (delay-shifts arrival hours, drops cancellations). Note: feed covers Cercanías only —
+  **no LD real-time exists** (Adif 403s, see above).
+- **Product decision:** Cercanías is shown as a separate column/series and **stays OUT of
+  the "¿Dónde ir ahora?" ranking** (commuters rarely take taxis) — hero shows it as an
+  info line only.
+
 ### Rejected sources (don't waste time re-trying these)
 - **trainoclock.com** (live train board): clean HTML **but behind Cloudflare → returns
   `HTTP 403` to GitHub's datacenter IP.** Works from a residential IP, not from CI.
@@ -97,17 +116,25 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
   "terminals": ["T1","T2","T3","T4"],
   "flights":  [{"hour":9,"terminal":"T4","city":"Barcelona","code":"BCN"}, ...],
   "trains":   [{"hour":9,"type":"AVE","number":"02061","city":"Sevilla-Santa Justa"}, ...],
+  "cercanias":[{"h":9,"m":34,"l":"C5","t":"1092M19545C5"}, ...],  // sched hour/min, line, trip_id
+  "cer_rt":   {"1092M20844C5":19, "1092M21575C2":"X", ...},       // delay min | "X"=cancelled
   "meta": {
     "flight_count": 570,
     "train_count": 116,
+    "cer_count": 971,
     "current_hour": 15,          // Madrid hour at scrape time (client recomputes live)
     "updated": "14 Jul, 15:28",  // Madrid local; client localizes month → "14 jul"
     "day": "2026-07-14",         // authoritative "today" (from airport clock)
-    "train_status": "ok_116"     // diagnostic: ok_N | http_403 | err_* | parse_*
+    "train_status": "ok_116",    // diagnostic: ok_N | http_403 | err_* | parse_*
+    "cer_status": "ok_971",      // same convention, Cercanías schedule
+    "cer_rt_status": "ok_59"     // GTFS-RT fetch: ok_N (N trips w/ incidents) | err_* | skip
   }
 }
 ```
-The front end tolerates missing `trains`/fields (renders empty). Keep it backward-compatible.
+The front end tolerates missing `trains`/`cercanias`/fields (renders empty, hides the
+Cercanías column). Keep it backward-compatible. `data.json` is ~85 KB (Pages gzips it).
+The client computes effective Cercanías hours as `h*60+m+delay` and hides terminals whose
+day total is 0 (T3 in practice — the source never assigns it arrivals).
 
 ---
 
@@ -198,35 +225,26 @@ source failed that run.
   refresh keeps the previous trains — an empty scrape never clobbers good data with zeros.
 - **Temp files:** use the session scratchpad, not the repo, for screenshots/experiments.
 
-### ⚠️ Train cache gotcha (important if you change train logic)
-`scrape.py` computes the train schedule **once per day and caches it** in `data.json`
-(`cached_ok` reuses `prev['trains']` when `meta.day` is unchanged and `train_status`
-starts with `ok`). **Consequence:** if you change the train-parsing code and push mid-day,
-the running job will *reuse the cached old trains* and your change won't show until the next
-day. To force a same-day re-parse: temporarily bypass the cache (e.g. make `cached_ok=False`),
-or commit is not enough — the simplest is to trigger a run after `meta.day` rolls over, or
-edit the cache check. Remember to restore the cache logic afterward.
+### ⚠️ Train cache gotcha (important if you change train/cercanías logic)
+`scrape.py` computes the LD train schedule **and the Cercanías schedule once per day and
+caches them** in `data.json` (`cached_ok`/`cer_cached` reuse `prev['trains']`/
+`prev['cercanias']` when `meta.day` is unchanged and the status starts with `ok`).
+**Consequence:** if you change the parsing code and push mid-day, the running job will
+*reuse the cached old data* and your change won't show until the next day. To force a
+same-day re-parse: temporarily bypass the cache check, or wait for `meta.day` to roll over.
+Remember to restore the cache logic afterward. (The `cer_rt` real-time map is NOT cached —
+it refreshes on every run.)
 
 ---
 
 ## 9. Improvement backlog (highest value first)
 
-1. **Cercanías (commuter) at Atocha — the explicitly-requested next step.**
-   - The user wants Cercanías shown **separated from long-distance AND their sum.**
-   - Source: a **Cercanías Madrid GTFS** (the AV/LD feed does NOT contain Cercanías trains;
-     stop `18000` = "Madrid-Atocha Cercanías" appears in stops.txt but has no LD trips).
-     Find the correct Renfe/NAP Cercanías GTFS (the guessed `Fichero_Cercanias_Madrid` path
-     404'd; look on `data.renfe.com` / `nap.mitma.es`).
-   - **Volume caveat:** Cercanías is dozens of trains/hour — it will **dwarf** airport
-     terminals and LD. **Keep it OUT of the "¿Dónde ir ahora?" ranking** (Cercanías riders
-     rarely take taxis) or normalize; show it as a separate info series. This was a
-     deliberate product decision.
-   - Data model: extend `trains` items with a `service` field (`"LD"` | `"CER"`), or add a
-     separate `cercanias` array. The Atocha table can then become `LD | Cercanías | Σ`.
+1. ~~Cercanías at Atocha~~ — **DONE (2026-07-14)**: schedule + GTFS-RT real-time, own
+   column in the unified hourly table, info line in the hero (out of the ranking).
 
-2. **Live trains (optional):** current trains are *scheduled*. If real-time is wanted, the
-   only realistic path is a **Cloudflare Worker** (or similar) that proxies a live board —
-   but note trainoclock is itself on Cloudflare, so test whether a Worker is allowed; or use
+2. **Live LD trains (optional):** LD is still *scheduled only* — the GTFS-RT feed covers
+   Cercanías exclusively. If real-time LD is wanted, the only paths are a **Cloudflare
+   Worker** proxying a live board (trainoclock is itself on Cloudflare — may not work) or
    Renfe's fragile `flotaLD.json`. Weigh against the reliability we have now.
 
 3. **Reliable freshness:** add an external `workflow_dispatch` pinger (see §8) if the
@@ -236,14 +254,17 @@ edit the cache check. Remember to restore the cache logic afterward.
    could map to Spanish ("Londres", "Roma"). Train origins are already Spanish (Renfe data).
 
 5. **Docs:** `README.md` still describes the airport-only version — update it to mention
-   trains/GTFS and this handoff.
+   trains/GTFS/Cercanías and this handoff.
 
 ---
 
 ## 10. TL;DR for the impatient
 - Static site + GitHub cron. Edit `index.html`/`scrape.py` locally → `git pull --rebase` →
   `git push`. Never touch `data.json`. Verify at ≥500px and via the live `data.json`.
-- Airport = live board (full day). Atocha = Renfe GTFS schedule (full day, not real-time)
-  because the live board is Cloudflare-blocked from CI.
-- Next task: **Cercanías via its own GTFS**, shown separately + summed, kept out of the
-  "go here" ranking.
+- Airport = live board (full day). Atocha LD = Renfe GTFS schedule (no real-time exists
+  for LD; live boards are blocked from CI). Cercanías = national Cercanías GTFS schedule
+  (stop 18000, cached daily) + official GTFS-RT delays/cancellations applied client-side;
+  kept out of the "go here" ranking by design.
+- UI: one unified hourly table (terminals + AVE·LD + Cerc), terminals with zero arrivals
+  all day are hidden automatically (bye T3), past hours collapsed by default, soft
+  data refresh (no page reload).
