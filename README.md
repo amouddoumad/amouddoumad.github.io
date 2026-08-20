@@ -1,7 +1,9 @@
-# MAD Arrivals — busiest terminal now
+# MAD Arrivals — busiest arrival point now
 
-A **fully static** web app that shows which Madrid Barajas terminal is busiest
-right now, plus arrivals per terminal per hour. No server to pay for.
+A **fully static** web app (Spanish UI, built for Madrid taxi drivers) that shows
+which arrival point is busiest right now — **Barajas terminals (T1–T4)**, plus
+**Atocha** and **Chamartín** train stations — with arrivals per hour. No server
+to pay for.
 
 - `index.html` — the whole app (HTML/CSS/JS). Fetches `data.json`, renders in the browser.
 - `data.json` — the scraped arrivals data. Refreshed automatically by GitHub Actions.
@@ -79,5 +81,12 @@ python -m http.server 8080
   previous `data.json` instead of publishing zeros.
 - **Commit history:** the cron commits `data.json` every 10 min, so history is
   chatty. That's normal and harmless; squash/prune later if you like.
-- **Source:** https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm
+- **Sources:**
+  - Airport (live): https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm
+  - Long-distance trains (scheduled): Renfe official AV/LD GTFS — arrivals
+    terminating at Atocha (stop `60000`) or Chamartín (stop `17000`).
+  - Cercanías (scheduled + real-time delays/cancellations): Renfe national
+    Cercanías GTFS + official GTFS-RT trip updates — trains stopping at
+    Atocha-Cercanías (`18000`) or Chamartín (`17000`). Shown out of the
+    "where to go" ranking by design (commuters rarely take taxis).
 - **T4** includes the T4S satellite. **T3** is auxiliary and usually has no arrivals.

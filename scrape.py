@@ -2,26 +2,28 @@
 Scraper for the static "Madrid arrivals" site. Runs in CI on a schedule and
 writes data.json — the single file the static front end fetches.
 
-Two data sources:
+Data sources:
 
 1. Airport (Madrid Barajas) — aeropuertomadrid-barajas.com. Live board, whole day
    via 3-hour time bands. Replaced every run.
 
-2. Train station (Madrid Puerta de Atocha, long-distance) — Renfe's official AV/LD
-   GTFS timetable (ssl.renfe.com). We count SCHEDULED arrivals (trains terminating
-   at Atocha, stop 60000) per hour for today's service calendar. This is a timetable,
-   not a live board — trainoclock's live board is behind Cloudflare and returns 403
-   to datacenter/CI IPs, so GTFS is the reliable source that also gives the full day
+2. Train stations, long-distance (Madrid-Puerta de Atocha stop 60000 and
+   Madrid-Chamartín stop 17000) — Renfe's official AV/LD GTFS timetable
+   (ssl.renfe.com). We count SCHEDULED arrivals (trains TERMINATING at each
+   station) per hour for today's service calendar. This is a timetable, not a live
+   board — trainoclock's live board is behind Cloudflare and returns 403 to
+   datacenter/CI IPs, so GTFS is the reliable source that also gives the full day
    at once. Recomputed once per day and cached in data.json between runs.
 
-3. Cercanías (Madrid-Atocha Cercanías, stop 18000) — Renfe's national Cercanías
-   GTFS (Fichero_CER_FOMENTO; the Fichero_CERCANIAS zip does NOT contain Madrid).
-   Every train STOPPING at Atocha counts (through station — passengers alight from
-   through trains too, unlike LD where we count terminating trips). Schedule is
-   cached once per day like LD. On top of it, Renfe's official GTFS-RT trip updates
-   (gtfsrt.renfe.com, refreshed every 20 s, trip_ids match the GTFS) give live
-   delays/cancellations — re-fetched on EVERY run into the small `cer_rt` map; the
-   front end applies it to the cached schedule.
+3. Cercanías (Atocha stop 18000 and Chamartín stop 17000) — Renfe's national
+   Cercanías GTFS (Fichero_CER_FOMENTO; the Fichero_CERCANIAS zip does NOT contain
+   Madrid). Every train STOPPING at the station counts (through stations —
+   passengers alight from through trains too, unlike LD where we count terminating
+   trips). Schedules are cached once per day like LD. On top of them, Renfe's
+   official GTFS-RT trip updates (gtfsrt.renfe.com, refreshed every 20 s, trip_ids
+   match the GTFS) give live delays/cancellations — re-fetched on EVERY run into
+   the small `cer_rt`/`cer_rt_ch` maps (the delay is read at each station's own
+   stopId); the front end applies them to the cached schedules.
 
 Standard library only.
 """
@@ -43,9 +45,10 @@ AIRPORT_URL = "https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-fligh
 TIME_BANDS = ["0-3", "3-6", "6-9", "9-12", "12-15", "15-18", "18-21", "21-0"]
 TERMINALS = ["T1", "T2", "T3", "T4"]  # T4S merged into T4
 
-# ---- train (Renfe AV/LD GTFS) ----
+# ---- trains (Renfe AV/LD GTFS) ----
 GTFS_URL = "https://ssl.renfe.com/gtransit/Fichero_AV_LD/google_transit.zip"
 ATOCHA_STOP = "60000"  # Madrid-Puerta de Atocha-Almudena Grandes (long-distance)
+CHAM_STOP = "17000"    # Madrid-Chamartín-Clara Campoamor (same id in the Cercanías feed)
 
 # ---- cercanías (Renfe national Cercanías/Rodalies GTFS + GTFS-RT) ----
 CER_GTFS_URL = "https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip"
@@ -172,16 +175,18 @@ def _active_services(z, date_str, weekday):
 
 
 def scrape_trains(today):
-    """Scheduled long-distance arrivals terminating at Atocha for `today`
-    (YYYY-MM-DD). Returns (trains, note)."""
+    """Scheduled long-distance arrivals terminating at Atocha (60000) or Chamartín
+    (17000) for `today` (YYYY-MM-DD) — one parse serves both stations. Returns
+    ({stop_id: [trains]}, {stop_id: note})."""
+    wanted = (ATOCHA_STOP, CHAM_STOP)
     if not today:
         today = datetime.date.today().isoformat()
     try:
         raw = _fetch_bytes(GTFS_URL)
     except urllib.error.HTTPError as e:
-        return [], f"http_{e.code}"
+        return {s: [] for s in wanted}, {s: f"http_{e.code}" for s in wanted}
     except Exception as e:  # noqa: BLE001
-        return [], f"err_{type(e).__name__}"
+        return {s: [] for s in wanted}, {s: f"err_{type(e).__name__}" for s in wanted}
     try:
         z = zipfile.ZipFile(io.BytesIO(raw))
         d = datetime.date.fromisoformat(today)
@@ -211,9 +216,9 @@ def scrape_trains(today):
             if ox is None or seq < ox[0]:
                 origin[tid] = (seq, st["stop_id"])
 
-        out = []
+        out = {s: [] for s in wanted}
         for tid, (seq, sid, at) in final.items():
-            if sid != ATOCHA_STOP:  # arrivals = trips terminating at Atocha
+            if sid not in out:  # arrivals = trips terminating at our stations
                 continue
             try:
                 hour = int(at.split(":")[0]) % 24
@@ -221,26 +226,32 @@ def scrape_trains(today):
                 continue
             typ = routes.get(trips[tid]["route"], "Tren")
             city = stops.get(origin.get(tid, (0, ""))[1], "")
-            out.append({"hour": hour, "type": typ, "number": trips[tid]["num"], "city": city})
-        out.sort(key=lambda t: (t["hour"], t.get("number", "")))
-        return out, f"ok_{len(out)}"
+            out[sid].append({"hour": hour, "type": typ, "number": trips[tid]["num"], "city": city})
+        notes = {}
+        for s, lst in out.items():
+            lst.sort(key=lambda t: (t["hour"], t.get("number", "")))
+            notes[s] = f"ok_{len(lst)}"
+        return out, notes
     except Exception as e:  # noqa: BLE001
-        return [], f"parse_{type(e).__name__}"
+        return {s: [] for s in wanted}, {s: f"parse_{type(e).__name__}" for s in wanted}
 
 
 # ---------------- cercanías (GTFS schedule + GTFS-RT live) ----------------
 def scrape_cercanias(today):
-    """Scheduled Cercanías trains STOPPING at Madrid-Atocha Cercanías for `today`.
-    Returns (items, note). Items are compact — {"h": hour, "m": minute,
-    "l": line (C1..C10), "t": trip_id} — `t` is what joins the GTFS-RT feed."""
+    """Scheduled Cercanías trains STOPPING at Madrid-Atocha (18000) or
+    Madrid-Chamartín (17000) for `today` — one parse serves both stations. Returns
+    ({stop_id: [items]}, {stop_id: note}). Items are compact — {"h": hour,
+    "m": minute, "l": line (C1..C10), "t": trip_id} — `t` is what joins the
+    GTFS-RT feed."""
+    wanted = (CER_STOP, CHAM_STOP)
     if not today:
         today = datetime.date.today().isoformat()
     try:
         raw = _fetch_bytes(CER_GTFS_URL)
     except urllib.error.HTTPError as e:
-        return [], f"http_{e.code}"
+        return {s: [] for s in wanted}, {s: f"http_{e.code}" for s in wanted}
     except Exception as e:  # noqa: BLE001
-        return [], f"err_{type(e).__name__}"
+        return {s: [] for s in wanted}, {s: f"err_{type(e).__name__}" for s in wanted}
     try:
         z = zipfile.ZipFile(io.BytesIO(raw))
         d = datetime.date.fromisoformat(today)
@@ -254,60 +265,65 @@ def scrape_cercanias(today):
             if t["service_id"] in active:
                 line[t["trip_id"]] = routes.get(t["route_id"], "C?")
 
-        out = []
+        out = {s: [] for s in wanted}
         for st in _gtfs_rows(z, "stop_times.txt"):
-            if st["stop_id"] != CER_STOP:
+            sid = st["stop_id"]
+            if sid not in out:
                 continue
             tid = st["trip_id"]
             if tid not in line:
                 continue
             try:
                 hh, mm = st["arrival_time"].split(":")[:2]
-                out.append({"h": int(hh) % 24, "m": int(mm), "l": line[tid], "t": tid})
+                out[sid].append({"h": int(hh) % 24, "m": int(mm), "l": line[tid], "t": tid})
             except Exception:  # noqa: BLE001
                 continue
-        out.sort(key=lambda c: (c["h"], c["m"]))
-        return out, f"ok_{len(out)}"
+        notes = {}
+        for s, lst in out.items():
+            lst.sort(key=lambda c: (c["h"], c["m"]))
+            notes[s] = f"ok_{len(lst)}"
+        return out, notes
     except Exception as e:  # noqa: BLE001
-        return [], f"parse_{type(e).__name__}"
+        return {s: [] for s in wanted}, {s: f"parse_{type(e).__name__}" for s in wanted}
 
 
-def cer_realtime(items):
-    """Live delays/cancellations for the cached Cercanías schedule, from Renfe's
-    official GTFS-RT trip updates. Returns ({trip_id: minutes | "X"}, note) —
-    "X" = cancelled (or Atocha skipped); only delays >= 1 min are recorded so the
-    map stays small. Missing trips simply run on time."""
-    if not items:
+def cer_realtime(items_by_stop):
+    """Live delays/cancellations for the cached Cercanías schedules, from Renfe's
+    official GTFS-RT trip updates — one feed fetch serves all stations, but the
+    delay is read at EACH station's own stopId (a train can be on time at Atocha
+    yet late reaching Chamartín). Returns ({stop_id: {trip_id: minutes | "X"}},
+    note) — "X" = cancelled (or station skipped); only delays >= 1 min are
+    recorded so the maps stay small. Missing trips simply run on time."""
+    ids_by_stop = {s: {it["t"] for it in lst} for s, lst in items_by_stop.items() if lst}
+    if not ids_by_stop:
         return {}, "skip"
-    ids = {it["t"] for it in items}
     try:
         feed = json.loads(_fetch_text(CER_RT_URL))
     except Exception as e:  # noqa: BLE001
-        return {}, f"err_{type(e).__name__}"
-    out = {}
+        return {s: {} for s in ids_by_stop}, f"err_{type(e).__name__}"
+    out = {s: {} for s in ids_by_stop}
     for ent in feed.get("entity", []):
         tu = ent.get("tripUpdate") or {}
         tid = (tu.get("trip") or {}).get("tripId")
-        if tid not in ids:
+        if tid is None:
             continue
-        if (tu.get("trip") or {}).get("scheduleRelationship") == "CANCELED":
-            out[tid] = "X"
-            continue
-        delay = tu.get("delay")  # trip-level fallback
-        for stu in tu.get("stopTimeUpdate") or []:
-            if stu.get("stopId") == CER_STOP:
-                if stu.get("scheduleRelationship") == "SKIPPED":
-                    delay = "X"
-                else:
-                    a = (stu.get("arrival") or {}).get("delay")
-                    if isinstance(a, (int, float)):
-                        delay = a
-                break
-        if delay == "X":
-            out[tid] = "X"
-        elif isinstance(delay, (int, float)) and abs(delay) >= 60:
-            out[tid] = round(delay / 60)
-    return out, f"ok_{len(out)}"
+        canceled = (tu.get("trip") or {}).get("scheduleRelationship") == "CANCELED"
+        stu_by_stop = {stu.get("stopId"): stu for stu in (tu.get("stopTimeUpdate") or [])}
+        for sid, ids in ids_by_stop.items():
+            if tid not in ids:
+                continue
+            stu = stu_by_stop.get(sid)
+            if canceled or (stu is not None and stu.get("scheduleRelationship") == "SKIPPED"):
+                out[sid][tid] = "X"
+                continue
+            delay = tu.get("delay")  # trip-level fallback
+            if stu is not None:
+                a = (stu.get("arrival") or {}).get("delay")
+                if isinstance(a, (int, float)):
+                    delay = a
+            if isinstance(delay, (int, float)) and abs(delay) >= 60:
+                out[sid][tid] = round(delay / 60)
+    return out, f"ok_{sum(len(m) for m in out.values())}"
 
 
 def main():
@@ -329,53 +345,82 @@ def main():
 
     # Trains: the schedule doesn't change during the day, so compute once per day
     # and reuse the cached result on later runs. Same policy for Cercanías below.
+    # Both stations are parsed together, so the cache is used only when BOTH are
+    # cached-and-ok — a missing station (e.g. the first run after adding one)
+    # forces a fresh parse of both.
     same_day = today is not None and prev_meta.get("day") == today
-    cached_ok = same_day and prev.get("trains") and str(prev_meta.get("train_status", "")).startswith("ok")
-    if cached_ok:
+    trains, trains_ch = [], []
+    train_note = train_ch_note = None
+    if (same_day and prev.get("trains") and prev.get("trains_ch")
+            and str(prev_meta.get("train_status", "")).startswith("ok")
+            and str(prev_meta.get("train_ch_status", "")).startswith("ok")):
         trains, train_note = prev["trains"], prev_meta.get("train_status")
+        trains_ch, train_ch_note = prev["trains_ch"], prev_meta.get("train_ch_status")
     else:
-        trains, train_note = scrape_trains(today)
-        if not trains and same_day and prev.get("trains"):
-            trains = prev["trains"]  # keep last good on a failed refresh
+        by_stop, notes = scrape_trains(today)
+        trains, train_note = by_stop[ATOCHA_STOP], notes[ATOCHA_STOP]
+        trains_ch, train_ch_note = by_stop[CHAM_STOP], notes[CHAM_STOP]
+        if not trains and same_day and prev.get("trains"):  # keep last good on a failed refresh
+            trains, train_note = prev["trains"], prev_meta.get("train_status")
+        if not trains_ch and same_day and prev.get("trains_ch"):
+            trains_ch, train_ch_note = prev["trains_ch"], prev_meta.get("train_ch_status")
 
-    cer_cached = same_day and prev.get("cercanias") and str(prev_meta.get("cer_status", "")).startswith("ok")
-    if cer_cached:
+    cercanias, cercanias_ch = [], []
+    cer_note = cer_ch_note = None
+    if (same_day and prev.get("cercanias") and prev.get("cercanias_ch")
+            and str(prev_meta.get("cer_status", "")).startswith("ok")
+            and str(prev_meta.get("cer_ch_status", "")).startswith("ok")):
         cercanias, cer_note = prev["cercanias"], prev_meta.get("cer_status")
+        cercanias_ch, cer_ch_note = prev["cercanias_ch"], prev_meta.get("cer_ch_status")
     else:
-        cercanias, cer_note = scrape_cercanias(today)
+        by_stop, notes = scrape_cercanias(today)
+        cercanias, cer_note = by_stop[CER_STOP], notes[CER_STOP]
+        cercanias_ch, cer_ch_note = by_stop[CHAM_STOP], notes[CHAM_STOP]
         if not cercanias and same_day and prev.get("cercanias"):
-            cercanias = prev["cercanias"]
+            cercanias, cer_note = prev["cercanias"], prev_meta.get("cer_status")
+        if not cercanias_ch and same_day and prev.get("cercanias_ch"):
+            cercanias_ch, cer_ch_note = prev["cercanias_ch"], prev_meta.get("cer_ch_status")
 
-    # Live layer refreshes on EVERY run (schedule above is the daily-cached base).
-    cer_rt, cer_rt_note = cer_realtime(cercanias)
+    # Live layer refreshes on EVERY run (schedules above are the daily-cached base).
+    cer_rt_by, cer_rt_note = cer_realtime({CER_STOP: cercanias, CHAM_STOP: cercanias_ch})
+    cer_rt = cer_rt_by.get(CER_STOP, {})
+    cer_rt_ch = cer_rt_by.get(CHAM_STOP, {})
 
     data = {
         "terminals": TERMINALS,
         "flights": flights,
         "trains": trains,
+        "trains_ch": trains_ch,
         "cercanias": cercanias,
+        "cercanias_ch": cercanias_ch,
         "cer_rt": cer_rt,
+        "cer_rt_ch": cer_rt_ch,
         "meta": {
             "flight_count": len(flights),
             "train_count": len(trains),
+            "train_ch_count": len(trains_ch),
             "cer_count": len(cercanias),
+            "cer_ch_count": len(cercanias_ch),
             "current_hour": clock[0] if clock else prev_meta.get("current_hour", -1),
             "updated": clock[1] if clock else prev_meta.get("updated", time.strftime("%d %b, %H:%M")),
             "day": today or "",
             "train_status": train_note,
+            "train_ch_status": train_ch_note,
             "cer_status": cer_note,
+            "cer_ch_status": cer_ch_note,
             "cer_rt_status": cer_rt_note,
         },
     }
 
-    if not flights and not trains:
+    if not flights and not trains and not trains_ch:
         print("Nothing scraped and no history — not writing.", file=sys.stderr)
         return
 
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"Wrote {OUT_PATH}: {len(flights)} flights, {len(trains)} trains ({train_note}), "
-          f"{len(cercanias)} cercanías ({cer_note}, rt {cer_rt_note}), day={today}")
+    print(f"Wrote {OUT_PATH}: {len(flights)} flights, {len(trains)}+{len(trains_ch)} trains "
+          f"({train_note}/{train_ch_note}), {len(cercanias)}+{len(cercanias_ch)} cercanías "
+          f"({cer_note}/{cer_ch_note}, rt {cer_rt_note}), day={today}")
 
 
 if __name__ == "__main__":

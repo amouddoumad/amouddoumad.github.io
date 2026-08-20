@@ -11,13 +11,13 @@
     --bg:#0a0f1e; --bg2:#16223f; --card:#121c33; --card2:#0f1830; --line:#22304e;
     --ink:#eaf0ff; --muted:#8ba0c9; --faint:#43547a; --shadow:rgba(0,0,0,.35);
     --t1:#f2749f; --t2:#5aa9e6; --t3:#f4b942; --t4:#54cf88; --atocha:#2fd0c8;
-    --cer:#b79bff; --tot:#b79bff; --now:#ff6b57; --heroInk:#0a0f1e;
+    --cer:#b79bff; --tot:#b79bff; --cham:#ff9040; --now:#ff6b57; --heroInk:#0a0f1e;
   }
   :root[data-theme="light"]{
     --bg:#eef2f9; --bg2:#dbe6fb; --card:#ffffff; --card2:#f3f6fc; --line:#d9e1f0;
     --ink:#15233d; --muted:#5a6b85; --faint:#93a2bf; --shadow:rgba(30,50,90,.10);
     --t1:#d81b6a; --t2:#1d6fd0; --t3:#c07d00; --t4:#0f9d55; --atocha:#0e9d94;
-    --cer:#6b46d6; --tot:#6b46d6; --now:#e23b1f; --heroInk:#ffffff;
+    --cer:#6b46d6; --tot:#6b46d6; --cham:#d97300; --now:#e23b1f; --heroInk:#ffffff;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
@@ -105,10 +105,13 @@
   /* ---------- unified hourly table (airport + Atocha) ---------- */
   .tbl{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 3px 14px var(--shadow)}
   .thead,.trow{display:grid; align-items:center}
-  .thead{background:var(--card2); color:var(--muted); font-size:11px; font-weight:800;
-    letter-spacing:.4px; text-align:center; padding:12px 0; border-radius:16px 16px 0 0}
+  .thead{background:var(--card2); color:var(--muted); font-weight:800;
+    text-align:center; padding:9px 0 11px; border-radius:16px 16px 0 0;
+    grid-template-rows:auto auto; row-gap:6px}
+  .thead .grp{font-size:9.5px; letter-spacing:.5px; text-transform:uppercase; color:var(--faint)}
+  .thead .sub{font-size:11px; letter-spacing:.4px}
   .thead .h,.trow .h{text-align:left; padding-left:12px; white-space:nowrap}
-  .thead .ld{color:var(--atocha)} .thead .cer{color:var(--cer)}
+  .thead .ld{color:var(--atocha)} .thead .cer{color:var(--cer)} .thead .chm{color:var(--cham)}
   .trow{padding:13px 0; border-top:1px solid var(--line); cursor:pointer; font-variant-numeric:tabular-nums}
   .trow:last-child{border-radius:0 0 16px 16px}
   .trow:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
@@ -234,14 +237,16 @@
 
     <!-- UNIFIED hourly table -->
     <div class="shead"><span class="ic">🕐</span> Llegadas por hora
-      <span class="tag" id="tblTag">aeropuerto + Atocha</span></div>
+      <span class="tag" id="tblTag">aeropuerto + Atocha + Chamartín</span></div>
     <div class="tbl"><div class="thead" id="airThead"></div><div id="airBody"></div></div>
     <div class="hint" style="margin-top:9px">Toca una hora para ver el detalle (vuelos y trenes)</div>
 
     <button class="collapse" id="airOrigToggle"><span>🌍 Principales orígenes (avión)</span><span class="ar">▾</span></button>
     <div class="orig" id="airOrigins"></div>
-    <button class="collapse" id="trOrigToggle"><span>🚄 Principales orígenes (tren LD)</span><span class="ar">▾</span></button>
+    <button class="collapse" id="trOrigToggle"><span>🚄 Principales orígenes (tren Atocha)</span><span class="ar">▾</span></button>
     <div class="orig" id="trOrigins"></div>
+    <button class="collapse" id="chOrigToggle"><span>🚄 Principales orígenes (tren Chamartín)</span><span class="ar">▾</span></button>
+    <div class="orig" id="chOrigins"></div>
 
     <div class="btnrow">
       <button class="btn" id="refreshBtn">↻ Actualizar</button>
@@ -261,7 +266,7 @@
 </div>
 
 <script>
-const COLOR={T1:'var(--t1)',T2:'var(--t2)',T3:'var(--t3)',T4:'var(--t4)',ATO:'var(--atocha)',CER:'var(--cer)'};
+const COLOR={T1:'var(--t1)',T2:'var(--t2)',T3:'var(--t3)',T4:'var(--t4)',ATO:'var(--atocha)',CHM:'var(--cham)',CER:'var(--cer)'};
 const CLS={T1:'t1',T2:'t2',T3:'t3',T4:'t4'};
 const MONTHS_ES={Jan:'ene',Feb:'feb',Mar:'mar',Apr:'abr',May:'may',Jun:'jun',
   Jul:'jul',Aug:'ago',Sep:'sep',Oct:'oct',Nov:'nov',Dec:'dic'};
@@ -274,7 +279,7 @@ applyTheme(localStorage.getItem('mad-theme')||(matchMedia('(prefers-color-scheme
 tbtn.onclick=()=>{ const t=root.dataset.theme==='light'?'dark':'light'; localStorage.setItem('mad-theme',t); applyTheme(t); };
 
 /* data + state */
-let FLIGHTS=[],TRAINS=[],CER=[],CER_RT={},TERMS=[],ACT=[],META={},NOW_H=-1;
+let FLIGHTS=[],TRAINS=[],TRAINS_CH=[],CER=[],CER_CH=[],CER_RT={},CER_RT_CH={},TERMS=[],ACT=[],META={},NOW_H=-1;
 let selected=new Set(),openHour=null,pastOpen=false,heroWhen='now',BOOTED=false;
 
 function madridHour(){
@@ -285,14 +290,15 @@ function madridHour(){
 const dayTotals=()=>{ const t={}; TERMS.forEach(x=>t[x]=0); FLIGHTS.forEach(f=>{ if(f.terminal in t)t[f.terminal]++; }); return t; };
 const activeTerms=()=>ACT.filter(t=>selected.has(t));
 const trainsAt=h=>TRAINS.filter(t=>t.hour===h).length;
+const trainsChAt=h=>TRAINS_CH.filter(t=>t.hour===h).length;
 const hh=h=>String(h).padStart(2,'0')+':00';
 
-/* Cercanías: apply the GTFS-RT delay/cancellation map to the cached schedule.
+/* Cercanías: apply a GTFS-RT delay/cancellation map to a cached schedule.
    Bucket per effective (delay-shifted) hour; cancellations counted at their scheduled hour. */
-function cerHours(){
+function cerHours(cer,rt){
   const out=Array.from({length:24},()=>({n:0,lines:{},del:0,can:0}));
-  CER.forEach(c=>{
-    const d=CER_RT[c.t];
+  cer.forEach(c=>{
+    const d=rt[c.t];
     if(d==='X'){ out[c.h].can++; return; }
     const add=(typeof d==='number')?d:0;
     const h=(((Math.floor((c.h*60+c.m+add)/60))%24)+24)%24;
@@ -300,7 +306,7 @@ function cerHours(){
   });
   return out;
 }
-let CERH=null; // recomputed on every render pass
+let CERH=null,CERH_CH=null; // recomputed on every render pass (Atocha / Chamartín)
 
 /* ---------- HERO ---------- */
 function renderHero(){
@@ -308,6 +314,7 @@ function renderHero(){
   document.getElementById('heroCap').textContent = heroWhen==='now'?`¿Dónde ir ahora? · ${hh(h)}`:`¿Dónde ir? · próxima ${hh(h)}`;
   const ent=ACT.map(t=>({k:t,short:t,name:'Terminal '+t,n:FLIGHTS.filter(f=>f.hour===h&&f.terminal===t).length}));
   ent.push({k:'ATO',short:'🚆',name:'Atocha (tren)',n:trainsAt(h)});
+  ent.push({k:'CHM',short:'🚆',name:'Chamartín (tren)',n:trainsChAt(h)});
   const ranked=ent.sort((a,b)=>b.n-a.n), top=ranked[0], max=Math.max(1,top.n);
   const w=document.getElementById('heroWinner');
   if(top.n===0){
@@ -319,13 +326,16 @@ function renderHero(){
       `<div class="small">llegadas a <b>${top.name}</b> a las ${hh(h)}</div></div>`;
   }
   document.getElementById('heroRank').innerHTML=ranked.map((r,i)=>
-    `<div class="rk ${i===0&&r.n>0?'win':''}"><div class="nm" style="color:${COLOR[r.k]}">${r.k==='ATO'?'Atocha':r.k}</div>`+
+    `<div class="rk ${i===0&&r.n>0?'win':''}"><div class="nm" style="color:${COLOR[r.k]}">${r.k==='ATO'?'Atocha':r.k==='CHM'?'Cham.':r.k}</div>`+
     `<div class="track"><div class="fill" style="width:${100*r.n/max}%;background:${COLOR[r.k]}"></div></div>`+
     `<div class="ct">${r.n}</div></div>`).join('');
   const cl=document.getElementById('heroCer');
-  if(CER.length){
+  const cerParts=[];
+  if(CER.length)cerParts.push(`Atocha <b>${CERH[h].n}</b>`);
+  if(CER_CH.length)cerParts.push(`Chamartín <b>${CERH_CH[h].n}</b>`);
+  if(cerParts.length){
     cl.style.display='block';
-    cl.innerHTML=`🚈 Cercanías Atocha: <b>${CERH[h].n}</b> llegadas a las ${hh(h)} — se muestra aparte (poco taxi)`;
+    cl.innerHTML=`🚈 Cercanías a las ${hh(h)} — ${cerParts.join(' · ')} (fuera del ranking, poco taxi)`;
   }else cl.style.display='none';
 }
 
@@ -346,21 +356,34 @@ function renderCards(){
   });
 }
 
-/* ---------- unified hourly table ---------- */
+/* ---------- unified hourly table (airport + Atocha + Chamartín) ---------- */
 const gridCss=n=>`grid-template-columns:88px repeat(${n},1fr)`;
 function renderTable(){
-  const cols=activeTerms(), hasCer=CER.length>0;
-  const n=cols.length+1+(hasCer?1:0);
+  const cols=activeTerms(), hasCer=CER.length>0, hasCerCh=CER_CH.length>0;
+  const n=cols.length+2+(hasCer?1:0)+(hasCerCh?1:0);
   const grid={}; for(let h=0;h<24;h++){grid[h]={};cols.forEach(c=>grid[h][c]=0);}
   FLIGHTS.forEach(f=>{ if(selected.has(f.terminal)) grid[f.hour][f.terminal]++; });
   const mxT={}; cols.forEach(c=>{ mxT[c]=1; for(let h=0;h<24;h++)mxT[c]=Math.max(mxT[c],grid[h][c]); });
-  let mxLD=1,mxCer=1; for(let h=0;h<24;h++){ mxLD=Math.max(mxLD,trainsAt(h)); if(hasCer)mxCer=Math.max(mxCer,CERH[h].n); }
+  let mxLD=1,mxLDch=1,mxCer=1,mxCerCh=1;
+  for(let h=0;h<24;h++){ mxLD=Math.max(mxLD,trainsAt(h)); mxLDch=Math.max(mxLDch,trainsChAt(h));
+    if(hasCer)mxCer=Math.max(mxCer,CERH[h].n); if(hasCerCh)mxCerCh=Math.max(mxCerCh,CERH_CH[h].n); }
   const heat=(v,mx,col)=>{ const a=v?Math.round(10+55*v/mx):0;
     return `<div class="cell ${v?'':'z'}"><span class="heat" ${v?`style="background:color-mix(in srgb, ${col} ${a}%, transparent)"`:''}>${v||'·'}</span></div>`; };
+  /* two-row header: group labels (Aeropuerto / Atocha / Chamartín) over their columns */
   const th=document.getElementById('airThead');
   th.style.cssText=gridCss(n);
-  th.innerHTML=`<div class="h">Hora</div>`+cols.map(c=>`<div>${c}</div>`).join('')+
-    `<div class="ld">AVE·LD</div>`+(hasCer?`<div class="cer">CERC</div>`:'');
+  const atoSpan=1+(hasCer?1:0), chaSpan=1+(hasCerCh?1:0);
+  let c=2, hd=`<div class="h" style="grid-column:1;grid-row:1/span 2">Hora</div>`;
+  if(cols.length){ hd+=`<div class="grp" style="grid-column:${c}/span ${cols.length};grid-row:1">Aeropuerto</div>`; c+=cols.length; }
+  hd+=`<div class="grp" style="grid-column:${c}/span ${atoSpan};grid-row:1;color:var(--atocha)">Atocha</div>`; c+=atoSpan;
+  hd+=`<div class="grp" style="grid-column:${c}/span ${chaSpan};grid-row:1;color:var(--cham)">Chamartín</div>`;
+  c=2;
+  cols.forEach(t=>{ hd+=`<div class="sub" style="grid-column:${c++};grid-row:2">${t}</div>`; });
+  hd+=`<div class="sub ld" style="grid-column:${c++};grid-row:2">LD</div>`;
+  if(hasCer)hd+=`<div class="sub cer" style="grid-column:${c++};grid-row:2">CERC</div>`;
+  hd+=`<div class="sub chm" style="grid-column:${c++};grid-row:2">LD</div>`;
+  if(hasCerCh)hd+=`<div class="sub cer" style="grid-column:${c++};grid-row:2">CERC</div>`;
+  th.innerHTML=hd;
   const tb=document.getElementById('airBody'); tb.innerHTML='';
   const past=NOW_H>0?NOW_H:0;
   if(past>0){
@@ -372,22 +395,45 @@ function renderTable(){
   for(let h=0;h<24;h++){
     if(h<past && !pastOpen) continue;
     let tot=0; cols.forEach(c=>tot+=grid[h][c]);
-    const ld=trainsAt(h), cer=hasCer?CERH[h].n:0;
+    const ld=trainsAt(h), ldch=trainsChAt(h);
+    const cer=hasCer?CERH[h].n:0, cerch=hasCerCh?CERH_CH[h].n:0;
     const isNow=(h===NOW_H), row=document.createElement('div');
-    row.className=`trow ${(tot+ld+cer)===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
+    row.className=`trow ${(tot+ld+ldch+cer+cerch)===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
     row.style.cssText=gridCss(n);
     row.innerHTML=`<div class="h">${isNow?'':'<span class="chev">▶</span>'}${hh(h)}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`+
       cols.map(c=>heat(grid[h][c],mxT[c],COLOR[c])).join('')+
-      heat(ld,mxLD,COLOR.ATO)+(hasCer?heat(cer,mxCer,COLOR.CER):'');
+      heat(ld,mxLD,COLOR.ATO)+(hasCer?heat(cer,mxCer,COLOR.CER):'')+
+      heat(ldch,mxLDch,COLOR.CHM)+(hasCerCh?heat(cerch,mxCerCh,COLOR.CER):'');
     row.onclick=()=>{ openHour=(openHour===h?null:h); renderTable(); };
     tb.appendChild(row);
     if(openHour===h){ const d=document.createElement('div'); d.className='detail'; d.appendChild(detailFor(h)); tb.appendChild(d); }
   }
   document.getElementById('tblTag').textContent=
-    (cols.length===ACT.length?'todas las terminales':cols.join('·'))+' + Atocha';
+    (cols.length===ACT.length?'todas las terminales':cols.join('·'))+' + Atocha + Chamartín';
 }
 
-/* hour detail: flights + LD trains + Cercanías lines */
+/* hour detail: flights + per-station LD trains + Cercanías lines */
+function ldSection(box,h,title,list,col){
+  const ld=list.filter(t=>t.hour===h).sort((a,b)=>a.city.localeCompare(b.city));
+  const s=document.createElement('div'); s.className='dsec'; s.textContent=`${title} · ${ld.length}`;
+  box.appendChild(s);
+  if(!ld.length){ box.insertAdjacentHTML('beforeend','<div class="none">Sin trenes LD esta hora.</div>'); return; }
+  ld.forEach(t=>{ const r=document.createElement('div'); r.className='orow';
+    r.innerHTML=`<span class="otype" style="color:${col};background:color-mix(in srgb,${col} 16%,transparent)">${t.type}</span>`+
+      `<span class="ocity">${t.city}</span>`+`<span class="ocode">${t.number||''}</span>`;
+    box.appendChild(r); });
+}
+function cerSection(box,h,title,b){
+  const s=document.createElement('div'); s.className='dsec'; s.textContent=`${title} · ${b.n}`;
+  box.appendChild(s);
+  if(!b.n){ box.insertAdjacentHTML('beforeend','<div class="none">Sin cercanías esta hora.</div>'); return; }
+  const chips=document.createElement('div'); chips.className='lchips';
+  Object.entries(b.lines).sort((a,b2)=>b2[1]-a[1]).forEach(([l,c])=>{
+    chips.insertAdjacentHTML('beforeend',`<span class="lchip">${l} <small>×${c}</small></span>`); });
+  box.appendChild(chips);
+  const notes=[]; if(b.del)notes.push(`${b.del} con retraso ≥5 min`); if(b.can)notes.push(`${b.can} cancelado${b.can>1?'s':''}`);
+  if(notes.length) box.insertAdjacentHTML('beforeend',`<div class="rtnote">⏱ ${notes.join(' · ')}</div>`);
+}
 function detailFor(h){
   const box=document.createElement('div');
   const sec=t=>{ const s=document.createElement('div'); s.className='dsec'; s.textContent=t; return s; };
@@ -405,26 +451,10 @@ function detailFor(h){
         `<span class="oterm" style="color:${COLOR[o.terminal]};background:color-mix(in srgb,${COLOR[o.terminal]} 16%,transparent)">${o.terminal}</span>`;
       box.appendChild(r); });
   }
-  const ld=TRAINS.filter(t=>t.hour===h).sort((a,b)=>a.city.localeCompare(b.city));
-  box.appendChild(sec(`🚄 Larga distancia · ${ld.length}`));
-  if(!ld.length){ box.insertAdjacentHTML('beforeend','<div class="none">Sin trenes LD esta hora.</div>'); }
-  else ld.forEach(t=>{ const r=document.createElement('div'); r.className='orow';
-    r.innerHTML=`<span class="otype" style="color:var(--atocha);background:color-mix(in srgb,var(--atocha) 16%,transparent)">${t.type}</span>`+
-      `<span class="ocity">${t.city}</span>`+`<span class="ocode">${t.number||''}</span>`;
-    box.appendChild(r); });
-  if(CER.length){
-    const b=CERH[h];
-    box.appendChild(sec(`🚈 Cercanías · ${b.n}`));
-    if(!b.n){ box.insertAdjacentHTML('beforeend','<div class="none">Sin cercanías esta hora.</div>'); }
-    else{
-      const chips=document.createElement('div'); chips.className='lchips';
-      Object.entries(b.lines).sort((a,b2)=>b2[1]-a[1]).forEach(([l,c])=>{
-        chips.insertAdjacentHTML('beforeend',`<span class="lchip">${l} <small>×${c}</small></span>`); });
-      box.appendChild(chips);
-      const notes=[]; if(b.del)notes.push(`${b.del} con retraso ≥5 min`); if(b.can)notes.push(`${b.can} cancelado${b.can>1?'s':''}`);
-      if(notes.length) box.insertAdjacentHTML('beforeend',`<div class="rtnote">⏱ ${notes.join(' · ')}</div>`);
-    }
-  }
+  ldSection(box,h,'🚄 Atocha LD',TRAINS,'var(--atocha)');
+  ldSection(box,h,'🚄 Chamartín LD',TRAINS_CH,'var(--cham)');
+  if(CER.length)cerSection(box,h,'🚈 Cercanías Atocha',CERH[h]);
+  if(CER_CH.length)cerSection(box,h,'🚈 Cercanías Chamartín',CERH_CH[h]);
   return box;
 }
 
@@ -441,23 +471,24 @@ function topOrigins(items, el, colorVar){
 }
 function renderAirOrigins(){ topOrigins(FLIGHTS.filter(f=>selected.has(f.terminal)), document.getElementById('airOrigins'), 'var(--t2)'); }
 function renderTrOrigins(){ topOrigins(TRAINS, document.getElementById('trOrigins'), 'var(--atocha)'); }
+function renderChOrigins(){ topOrigins(TRAINS_CH, document.getElementById('chOrigins'), 'var(--cham)'); }
 
 /* ---------- sources ---------- */
 function renderSources(){
   const rtOk=String(META.cer_rt_status||'').startsWith('ok');
-  const nrt=Object.keys(CER_RT).length;
+  const nrt=Object.keys(CER_RT).length+Object.keys(CER_RT_CH).length;
   const rows=[
     {ic:'✈️',badge:'<span class="badge blive">EN VIVO</span>',
      t:'<a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>',
      d:'Tablón de llegadas del aeropuerto, día completo por terminal. Se actualiza en cada refresco (~10 min).'},
     {ic:'🚄',badge:'<span class="badge bsched">HORARIO</span>',
      t:'Renfe datos abiertos — <a href="https://data.renfe.com/">GTFS AV/LD</a>',
-     d:'Horario oficial del día de larga distancia con destino final Atocha (AVE, Alvia, Avlo, Avant, Intercity). Sin retrasos en vivo.'},
+     d:'Horario oficial del día de larga distancia con destino final Atocha o Chamartín (AVE, Alvia, Avlo, Avant, Intercity, MD). Sin retrasos en vivo.'},
   ];
-  if(CER.length) rows.push(
+  if(CER.length||CER_CH.length) rows.push(
     {ic:'🚈',badge:rtOk?'<span class="badge brt">TIEMPO REAL</span>':'<span class="badge bsched">HORARIO</span>',
      t:'Renfe Cercanías — <a href="https://data.renfe.com/">GTFS + GTFS-RT</a>',
-     d:'Todos los trenes que paran en Atocha-Cercanías. '+(rtOk
+     d:'Todos los trenes que paran en Atocha-Cercanías y Chamartín-Cercanías. '+(rtOk
         ?`Retrasos y cancelaciones en tiempo real (feed oficial, act. cada 20 s) — ${nrt} tren${nrt===1?'':'es'} con incidencia ahora.`
         :'El feed de tiempo real no está disponible ahora mismo; se muestra el horario.')});
   document.getElementById('srcs').innerHTML=rows.map(r=>
@@ -466,14 +497,18 @@ function renderSources(){
 
 /* ---------- render / refresh ---------- */
 function renderAll(){
-  CERH=CER.length?cerHours():null;
-  renderHero(); renderCards(); renderTable(); renderAirOrigins(); renderTrOrigins(); renderSources();
+  CERH=CER.length?cerHours(CER,CER_RT):null;
+  CERH_CH=CER_CH.length?cerHours(CER_CH,CER_RT_CH):null;
+  renderHero(); renderCards(); renderTable(); renderAirOrigins(); renderTrOrigins(); renderChOrigins(); renderSources();
   document.getElementById('updated').textContent=META.updated?`· ${esDate(META.updated)}`:'';
   document.getElementById('counts').textContent=
-    `${FLIGHTS.length} vuelos · ${TRAINS.length} trenes LD · ${CER.length?CER.length+' cercanías':'cercanías n/d'} hoy.`;
+    `${FLIGHTS.length} vuelos · LD Atocha ${TRAINS.length} · Chamartín ${TRAINS_CH.length} · `+
+    `${(CER.length||CER_CH.length)?`cercanías ${CER.length}+${CER_CH.length}`:'cercanías n/d'} hoy.`;
 }
 function apply(data){
-  FLIGHTS=data.flights||[]; TRAINS=data.trains||[]; CER=data.cercanias||[]; CER_RT=data.cer_rt||{};
+  FLIGHTS=data.flights||[]; TRAINS=data.trains||[]; TRAINS_CH=data.trains_ch||[];
+  CER=data.cercanias||[]; CER_CH=data.cercanias_ch||[];
+  CER_RT=data.cer_rt||{}; CER_RT_CH=data.cer_rt_ch||{};
   TERMS=data.terminals||['T1','T2','T3','T4']; META=data.meta||{};
   NOW_H=madridHour();
   const tot=dayTotals(); ACT=TERMS.filter(t=>tot[t]>0); if(!ACT.length)ACT=TERMS.slice();
@@ -506,7 +541,7 @@ function collapse(btnId, boxId){ const b=document.getElementById(btnId), x=docum
   b.onclick=()=>{ const o=x.classList.toggle('show'); b.classList.toggle('open',o); }; }
 document.getElementById('segNow').onclick=()=>{heroWhen='now';seg();renderHero();};
 document.getElementById('segNext').onclick=()=>{heroWhen='next';seg();renderHero();};
-collapse('airOrigToggle','airOrigins'); collapse('trOrigToggle','trOrigins');
+collapse('airOrigToggle','airOrigins'); collapse('trOrigToggle','trOrigins'); collapse('chOrigToggle','chOrigins');
 document.getElementById('refreshBtn').onclick=()=>loadData(true);
 document.getElementById('resetBtn').onclick=()=>{ selected=new Set(ACT); openHour=null; renderCards(); renderTable(); renderAirOrigins(); };
 
