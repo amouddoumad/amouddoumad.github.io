@@ -105,13 +105,10 @@
   /* ---------- unified hourly table (airport + Atocha) ---------- */
   .tbl{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 3px 14px var(--shadow)}
   .thead,.trow{display:grid; align-items:center}
-  .thead{background:var(--card2); color:var(--muted); font-weight:800;
-    text-align:center; padding:9px 0 11px; border-radius:16px 16px 0 0;
-    grid-template-rows:auto auto; row-gap:6px}
-  .thead .grp{font-size:9.5px; letter-spacing:.5px; text-transform:uppercase; color:var(--faint)}
-  .thead .sub{font-size:11px; letter-spacing:.4px}
+  .thead{background:var(--card2); color:var(--muted); font-size:11px; font-weight:800;
+    letter-spacing:.4px; text-align:center; padding:12px 0; border-radius:16px 16px 0 0}
   .thead .h,.trow .h{text-align:left; padding-left:12px; white-space:nowrap}
-  .thead .ld{color:var(--atocha)} .thead .cer{color:var(--cer)} .thead .chm{color:var(--cham)}
+  .thead .ld{color:var(--atocha); font-size:10.5px} .thead .chm{color:var(--cham); font-size:10.5px}
   .trow{padding:13px 0; border-top:1px solid var(--line); cursor:pointer; font-variant-numeric:tabular-nums}
   .trow:last-child{border-radius:0 0 16px 16px}
   .trow:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
@@ -130,6 +127,25 @@
     font-weight:750; cursor:pointer; letter-spacing:.2px}
   .xrow:active{background:color-mix(in srgb,var(--ink) 5%,transparent)}
   .xrow + .trow{border-top:1px solid var(--line)}
+
+  /* ---------- cercanías strip (out of ranking, own card) ---------- */
+  .cerstrip{margin-top:10px; background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:12px 12px 11px; box-shadow:0 2px 8px var(--shadow)}
+  .cscap{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:9px}
+  .cscap .t{font-size:12.5px; font-weight:850; letter-spacing:.2px}
+  .cscap .mini{font-size:10.5px; font-weight:700; color:var(--faint); text-align:right}
+  .csrow{display:grid; grid-template-columns:34px 1fr; align-items:center; gap:8px; padding:3px 0}
+  .cslab{font-size:10px; font-weight:900; letter-spacing:.4px}
+  .cscells{display:grid; grid-template-columns:repeat(24,1fr); gap:2px}
+  .cscell{height:14px; border-radius:3px; background:color-mix(in srgb,var(--ink) 6%,transparent); cursor:pointer}
+  .cscell:active{transform:scale(.92)}
+  .cscell.cnow{box-shadow:inset 0 0 0 1.5px var(--now)}
+  .csaxis{display:grid; grid-template-columns:34px 1fr; gap:8px; margin-top:5px}
+  .csaxis .cscells{gap:0}
+  .cstick{font-size:9px; color:var(--faint); font-weight:700; font-variant-numeric:tabular-nums}
+  .csnow{margin-top:9px; padding-top:8px; border-top:1px dashed var(--line);
+    color:var(--muted); font-size:12px; font-weight:650}
+  .csnow b{color:var(--cer); font-variant-numeric:tabular-nums}
 
   .detail{padding:2px 14px 14px; background:color-mix(in srgb,var(--ink) 4%,transparent); border-top:1px solid var(--line)}
   .dsec{color:var(--faint); font-size:10.5px; font-weight:850; letter-spacing:.6px; text-transform:uppercase; margin:12px 0 3px}
@@ -239,6 +255,7 @@
     <div class="shead"><span class="ic">🕐</span> Llegadas por hora
       <span class="tag" id="tblTag">aeropuerto + Atocha + Chamartín</span></div>
     <div class="tbl"><div class="thead" id="airThead"></div><div id="airBody"></div></div>
+    <div class="cerstrip" id="cerStrip"></div>
     <div class="hint" style="margin-top:9px">Toca una hora para ver el detalle (vuelos y trenes)</div>
 
     <button class="collapse" id="airOrigToggle"><span>🌍 Principales orígenes (avión)</span><span class="ar">▾</span></button>
@@ -356,34 +373,22 @@ function renderCards(){
   });
 }
 
-/* ---------- unified hourly table (airport + Atocha + Chamartín) ---------- */
+/* ---------- unified hourly table (airport + Atocha + Chamartín LD) ---------- */
 const gridCss=n=>`grid-template-columns:88px repeat(${n},1fr)`;
 function renderTable(){
-  const cols=activeTerms(), hasCer=CER.length>0, hasCerCh=CER_CH.length>0;
-  const n=cols.length+2+(hasCer?1:0)+(hasCerCh?1:0);
+  const cols=activeTerms();
+  const n=cols.length+2;
   const grid={}; for(let h=0;h<24;h++){grid[h]={};cols.forEach(c=>grid[h][c]=0);}
   FLIGHTS.forEach(f=>{ if(selected.has(f.terminal)) grid[f.hour][f.terminal]++; });
   const mxT={}; cols.forEach(c=>{ mxT[c]=1; for(let h=0;h<24;h++)mxT[c]=Math.max(mxT[c],grid[h][c]); });
-  let mxLD=1,mxLDch=1,mxCer=1,mxCerCh=1;
-  for(let h=0;h<24;h++){ mxLD=Math.max(mxLD,trainsAt(h)); mxLDch=Math.max(mxLDch,trainsChAt(h));
-    if(hasCer)mxCer=Math.max(mxCer,CERH[h].n); if(hasCerCh)mxCerCh=Math.max(mxCerCh,CERH_CH[h].n); }
+  let mxLD=1,mxLDch=1;
+  for(let h=0;h<24;h++){ mxLD=Math.max(mxLD,trainsAt(h)); mxLDch=Math.max(mxLDch,trainsChAt(h)); }
   const heat=(v,mx,col)=>{ const a=v?Math.round(10+55*v/mx):0;
     return `<div class="cell ${v?'':'z'}"><span class="heat" ${v?`style="background:color-mix(in srgb, ${col} ${a}%, transparent)"`:''}>${v||'·'}</span></div>`; };
-  /* two-row header: group labels (Aeropuerto / Atocha / Chamartín) over their columns */
   const th=document.getElementById('airThead');
   th.style.cssText=gridCss(n);
-  const atoSpan=1+(hasCer?1:0), chaSpan=1+(hasCerCh?1:0);
-  let c=2, hd=`<div class="h" style="grid-column:1;grid-row:1/span 2">Hora</div>`;
-  if(cols.length){ hd+=`<div class="grp" style="grid-column:${c}/span ${cols.length};grid-row:1">Aeropuerto</div>`; c+=cols.length; }
-  hd+=`<div class="grp" style="grid-column:${c}/span ${atoSpan};grid-row:1;color:var(--atocha)">Atocha</div>`; c+=atoSpan;
-  hd+=`<div class="grp" style="grid-column:${c}/span ${chaSpan};grid-row:1;color:var(--cham)">Chamartín</div>`;
-  c=2;
-  cols.forEach(t=>{ hd+=`<div class="sub" style="grid-column:${c++};grid-row:2">${t}</div>`; });
-  hd+=`<div class="sub ld" style="grid-column:${c++};grid-row:2">LD</div>`;
-  if(hasCer)hd+=`<div class="sub cer" style="grid-column:${c++};grid-row:2">CERC</div>`;
-  hd+=`<div class="sub chm" style="grid-column:${c++};grid-row:2">LD</div>`;
-  if(hasCerCh)hd+=`<div class="sub cer" style="grid-column:${c++};grid-row:2">CERC</div>`;
-  th.innerHTML=hd;
+  th.innerHTML=`<div class="h">Hora</div>`+cols.map(c=>`<div>${c}</div>`).join('')+
+    `<div class="ld">Atocha</div><div class="chm">Chamartín</div>`;
   const tb=document.getElementById('airBody'); tb.innerHTML='';
   const past=NOW_H>0?NOW_H:0;
   if(past>0){
@@ -396,20 +401,44 @@ function renderTable(){
     if(h<past && !pastOpen) continue;
     let tot=0; cols.forEach(c=>tot+=grid[h][c]);
     const ld=trainsAt(h), ldch=trainsChAt(h);
-    const cer=hasCer?CERH[h].n:0, cerch=hasCerCh?CERH_CH[h].n:0;
     const isNow=(h===NOW_H), row=document.createElement('div');
-    row.className=`trow ${(tot+ld+ldch+cer+cerch)===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
+    row.className=`trow ${(tot+ld+ldch)===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
     row.style.cssText=gridCss(n);
     row.innerHTML=`<div class="h">${isNow?'':'<span class="chev">▶</span>'}${hh(h)}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`+
       cols.map(c=>heat(grid[h][c],mxT[c],COLOR[c])).join('')+
-      heat(ld,mxLD,COLOR.ATO)+(hasCer?heat(cer,mxCer,COLOR.CER):'')+
-      heat(ldch,mxLDch,COLOR.CHM)+(hasCerCh?heat(cerch,mxCerCh,COLOR.CER):'');
+      heat(ld,mxLD,COLOR.ATO)+heat(ldch,mxLDch,COLOR.CHM);
     row.onclick=()=>{ openHour=(openHour===h?null:h); renderTable(); };
     tb.appendChild(row);
     if(openHour===h){ const d=document.createElement('div'); d.className='detail'; d.appendChild(detailFor(h)); tb.appendChild(d); }
   }
   document.getElementById('tblTag').textContent=
     (cols.length===ACT.length?'todas las terminales':cols.join('·'))+' + Atocha + Chamartín';
+}
+
+/* ---------- cercanías strip: 24-hour heat, both stations, out of ranking ---------- */
+function renderCerStrip(){
+  const el=document.getElementById('cerStrip');
+  if(!CER.length&&!CER_CH.length){ el.style.display='none'; return; }
+  el.style.display='';
+  let mx=1;
+  for(let h=0;h<24;h++)mx=Math.max(mx,(CER.length?CERH[h].n:0),(CER_CH.length?CERH_CH[h].n:0));
+  const cell=(n,h)=>{ const a=n?Math.round(12+58*n/mx):0;
+    return `<div class="cscell ${h===NOW_H?'cnow':''}" data-h="${h}" `+
+      (n?`style="background:color-mix(in srgb,var(--cer) ${a}%,transparent)"`:'')+`></div>`; };
+  const row=(lab,color,buckets)=>`<div class="csrow"><span class="cslab" style="color:${color}">${lab}</span>`+
+    `<div class="cscells">${Array.from({length:24},(_,h)=>cell(buckets[h].n,h)).join('')}</div></div>`;
+  let html=`<div class="cscap"><span class="t">🚈 Cercanías por hora</span>`+
+    `<span class="mini">fuera del ranking · toca una hora</span></div>`;
+  if(CER.length)html+=row('ATO','var(--atocha)',CERH);
+  if(CER_CH.length)html+=row('CHA','var(--cham)',CERH_CH);
+  html+=`<div class="csaxis"><span></span><div class="cscells">`+
+    [0,6,12,18].map(h=>`<div class="cstick" style="grid-column:${h+1}/span 6">${hh(h)}</div>`).join('')+`</div></div>`;
+  if(NOW_H>=0){
+    const a=CER.length?CERH[NOW_H].n:0, c=CER_CH.length?CERH_CH[NOW_H].n:0;
+    const bits=[]; if(CER.length)bits.push(`Atocha <b>${a}</b>`); if(CER_CH.length)bits.push(`Chamartín <b>${c}</b>`);
+    html+=`<div class="csnow">Ahora (${hh(NOW_H)}): ${bits.join(' · ')} trenes</div>`;
+  }
+  el.innerHTML=html;
 }
 
 /* hour detail: flights + per-station LD trains + Cercanías lines */
@@ -499,7 +528,7 @@ function renderSources(){
 function renderAll(){
   CERH=CER.length?cerHours(CER,CER_RT):null;
   CERH_CH=CER_CH.length?cerHours(CER_CH,CER_RT_CH):null;
-  renderHero(); renderCards(); renderTable(); renderAirOrigins(); renderTrOrigins(); renderChOrigins(); renderSources();
+  renderHero(); renderCards(); renderTable(); renderCerStrip(); renderAirOrigins(); renderTrOrigins(); renderChOrigins(); renderSources();
   document.getElementById('updated').textContent=META.updated?`· ${esDate(META.updated)}`:'';
   document.getElementById('counts').textContent=
     `${FLIGHTS.length} vuelos · LD Atocha ${TRAINS.length} · Chamartín ${TRAINS_CH.length} · `+
@@ -544,6 +573,12 @@ document.getElementById('segNext').onclick=()=>{heroWhen='next';seg();renderHero
 collapse('airOrigToggle','airOrigins'); collapse('trOrigToggle','trOrigins'); collapse('chOrigToggle','chOrigins');
 document.getElementById('refreshBtn').onclick=()=>loadData(true);
 document.getElementById('resetBtn').onclick=()=>{ selected=new Set(ACT); openHour=null; renderCards(); renderTable(); renderAirOrigins(); };
+/* tapping a strip cell opens that hour's detail in the table above */
+document.getElementById('cerStrip').addEventListener('click',e=>{
+  const c=e.target.closest('.cscell'); if(!c)return;
+  const h=+c.dataset.h; openHour=(openHour===h?null:h); renderTable();
+  const d=document.querySelector('.detail'); if(d)d.scrollIntoView({behavior:'smooth',block:'center'});
+});
 
 loadData(false);
 setInterval(()=>loadData(false), 5*60*1000);              // soft refresh — keeps scroll & state

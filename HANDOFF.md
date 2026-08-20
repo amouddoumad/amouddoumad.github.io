@@ -101,9 +101,12 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
   time at Atocha yet late at Chamartín). The FRONT END applies the maps to the cached
   schedules (delay-shifts arrival hours, drops cancellations). Note: feed covers
   Cercanías only — **no LD real-time exists** (Adif 403s, see above).
-- **Product decision:** Cercanías is shown as separate columns/series and **stays OUT of
-  the "¿Dónde ir ahora?" ranking** (commuters rarely take taxis) — hero shows one info
-  line with both stations.
+- **Product decision:** Cercanías **stays OUT of the hourly table and the "¿Dónde ir
+  ahora?" ranking** (commuters rarely take taxis). It renders as its own compact
+  **24-hour heat strip below the table** (`.cerstrip`: two rows ATO/CHA, purple
+  intensity, current hour outlined in red, tap a cell → that hour's detail opens in
+  the table) plus one info line in the hero. This keeps the mobile table wide:
+  Hora + terminals + one LD column per station.
 
 ### Rejected sources (don't waste time re-trying these)
 - **trainoclock.com** (live train board): clean HTML **but behind Cloudflare → returns
@@ -257,8 +260,10 @@ real-time maps are NOT cached — they refresh on every run.)
    column in the unified hourly table, info line in the hero (out of the ranking).
 
 2. ~~Chamartín (LD + Cercanías)~~ — **DONE (2026-08-20)**: stop `17000` in both feeds,
-   LD in the hero ranking (orange `--cham`), Cercanías with per-station RT maps,
-   grouped two-row table header (Aeropuerto / Atocha / Chamartín).
+   LD in the hero ranking (orange `--cham`), Cercanías with per-station RT maps shown
+   as its own 24-hour heat strip below the table (mobile: the table stays wide —
+   terminals + one LD column per station; 2026-08-20 later same day the grouped
+   two-row table header was dropped as too crowded on phones).
 
 3. **Live LD trains (optional):** LD is still *scheduled only* — the GTFS-RT feed covers
    Cercanías exclusively. If real-time LD is wanted, the only paths are a **Cloudflare
@@ -285,6 +290,7 @@ real-time maps are NOT cached — they refresh on every run.)
   Cercanías = national Cercanías GTFS schedule (stops 18000 / 17000, cached daily) +
   official GTFS-RT delays/cancellations applied client-side per station; kept out of the
   "go here" ranking by design.
-- UI: one unified hourly table (terminals + Atocha LD/CERC + Chamartín LD/CERC) with a
-  grouped header, terminals with zero arrivals all day are hidden automatically (bye T3),
-  past hours collapsed by default, soft data refresh (no page reload).
+- UI: one unified hourly table (terminals + Atocha LD + Chamartín LD, single-row
+  header) plus a separate Cercanías 24-hour heat strip below it (tap a cell → that
+  hour's detail); terminals with zero arrivals all day are hidden automatically (bye
+  T3), past hours collapsed by default, soft data refresh (no page reload).
