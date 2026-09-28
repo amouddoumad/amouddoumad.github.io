@@ -5,8 +5,10 @@
     run_backup.py --dry      gate only: report the decision, never push
     run_backup.py --no-pull  skip the `git pull` that keeps the repo fresh
 
-Loads KEY=VALUE lines from /etc/mad-backup.env (chmod 600, holds
-GITHUB_TOKEN etc.) unless they are already in the environment.
+Loads KEY=VALUE lines from /etc/mad-backup.env, or — when that is absent
+or unreadable, i.e. on a box without root — from ~/.mad-backup.env
+(chmod 600, holds GITHUB_TOKEN etc.) unless they are already in the
+environment. MAD_BACKUP_ENV overrides both paths.
 """
 
 import os
@@ -15,7 +17,6 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-ENV_FILE = "/etc/mad-backup.env"
 
 sys.path.insert(0, REPO)   # scrape.py
 sys.path.insert(0, HERE)   # backup.py
@@ -23,18 +24,26 @@ sys.path.insert(0, HERE)   # backup.py
 import backup  # noqa: E402
 
 
-def load_env_file(path=ENV_FILE):
-    try:
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+def env_files():
+    override = os.environ.get("MAD_BACKUP_ENV")
+    if override:
+        return [override]
+    return ["/etc/mad-backup.env", os.path.expanduser("~/.mad-backup.env")]
+
+
+def load_env_file(path=None):
+    for p in (path or env_files()):
+        try:
+            with open(p, encoding="utf-8") as f:
+                lines = f.readlines()
+        except OSError:
             continue
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip())
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
 
 
 def git_pull():
