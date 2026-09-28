@@ -3,9 +3,9 @@ Independent backup runner for data.json (HANDOFF.md section 12).
 
 Why: GitHub Actions, which normally runs scrape.py on a schedule, sometimes
 loses turns. This is a second runner on someone else's clock: a cron job on
-the Google Cloud Always-Free e2-micro VM (setup-vm.sh installs it). The logic
-itself is platform-agnostic and standard library only. It is a BACKUP, not a
-second primary:
+an always-on box the owner controls (setup-vm.sh installs it on any
+Debian/Ubuntu host). The logic itself is platform-agnostic and standard
+library only. It is a BACKUP, not a second primary:
 
 1. GET data.json from the GitHub Contents API. One call gives us the file
    content (used to seed scrape.py's same-day caches) and its blob sha (needed
@@ -129,7 +129,7 @@ def run_scrape(prev, tmpdir=None):
 def push(owner, repo, token, data, sha, log=print):
     meta = data.setdefault("meta", {})
     meta["src"] = "backup"
-    meta["pushed_by"] = "gce-backup"
+    meta["pushed_by"] = _cfg("PUSHED_BY", "backup-runner")
     body = {
         "message": "data: backup refresh (independent runner)",
         "content": base64.b64encode(

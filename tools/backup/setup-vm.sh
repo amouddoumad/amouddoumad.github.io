@@ -1,6 +1,7 @@
 #!/bin/sh
-# One-shot bootstrap for the backup runner VM (run as root, idempotent).
-# Google Cloud Always-Free e2-micro, Debian, us-west1 — see HANDOFF.md §12.
+# One-shot bootstrap for the backup runner (run as root, idempotent).
+# Any always-on Debian/Ubuntu box will do (apt-get is the only distro hook)
+# — see HANDOFF.md §12.
 # After running: put the GitHub PAT into /etc/mad-backup.env, then check with
 #   cd /opt/mad-arrivals && python3 tools/backup/run_backup.py --dry
 set -eu
@@ -24,6 +25,7 @@ GH_OWNER=amouddoumad
 GH_REPO=amouddoumad.github.io
 # STALE_MIN=35
 # BACKUP_STALE=30
+# PUSHED_BY=backup-runner
 EOF
     chmod 600 /etc/mad-backup.env
     echo ">> EDIT /etc/mad-backup.env and set GITHUB_TOKEN (fine-grained PAT, this repo, Contents: RW)."

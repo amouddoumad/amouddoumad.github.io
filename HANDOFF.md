@@ -403,16 +403,16 @@ signup, no domain proof, 2-line snippet, equivalent reports).
 
 ---
 
-## 12. Independent backup runner for data.json on a Google Cloud VM (built 2026-09-28)
+## 12. Independent backup runner for data.json (built 2026-09-28)
 
 GitHub Actions sometimes loses scheduled turns (observed again the night this was
 built: data.json 102 min stale). The cron-job.org pinger (§9) is the fast path; this is
-the independent second runner on someone else's clock, on Google Cloud's **Always-Free**
-tier (a real e2-micro VM, free forever, but GCP signup requires a card for the identity
-check — trial credit $300/90 d; note the free-tier e2-micro only *stays* usable after the
-trial if the account is later upgraded to paid, which still costs nothing at our volume).
-Chosen over Azure Functions because the only Azure account available was the employer's
-tenant. Code in `tools/backup/`.
+the independent second runner on someone else's clock. Home: the owner's **own always-on
+VM** — anything Debian/Ubuntu with outbound HTTPS. Code in `tools/backup/`. History, so
+nobody hunts ghosts: it was first deployed the same day onto a Google Cloud Always-Free
+e2-micro (us-west1); the owner then cancelled that plan, the VM was deleted and the GCP
+billing account closed (€0.00 ever charged) on 2026-09-28. The runner logic never cared
+where it ran and stayed untouched through the move.
 
 **Backup, not co-primary** (`tools/backup/backup.py`, tested 2026-09-28 end-to-end
 locally: 522 flights + trains + Cercanías RT through the exact runner entry point):
@@ -429,7 +429,7 @@ locally: 522 flights + trains + Cercanías RT through the exact runner entry poi
      re-runs on `BACKUP_STALE` (default **30** min) until the GitHub runner takes
      over again (its pushes carry no `src`).
   3. Stale → run `scrape.py` (imported, `OUT_PATH` pointed into a temp dir), stamp
-     `meta.src="backup"` + `meta.pushed_by="gce-backup"`, PUT via Contents API quoting
+     `meta.src="backup"` + `meta.pushed_by="backup-runner"` (env `PUSHED_BY`), PUT via Contents API quoting
      the sha. HTTP 409 (GitHub runner pushed mid-scrape) → re-read: fresh ⇒ stand
      down, stale ⇒ retry once. Commit message: `data: backup refresh (independent
      runner)`. The site's freshness badge shows these pushes exactly like normal ones.
@@ -440,26 +440,19 @@ locally: 522 flights + trains + Cercanías RT through the exact runner entry poi
   --dry` runs the gate without pushing — the local smoke test too (works from any
   checkout, no VM needed).
 
-**The VM** (created via console.cloud.google.com this session): project
-`mad-arrivals`, region `us-west1` (one of the three Always-Free regions; latency is
-irrelevant — it fetches Spanish servers either way), machine `e2-micro`, **pd-standard**
-30 GB disk (a pd-balanced boot disk would exceed the free grant — pick standard!),
-Debian 12/13, no external IP needed: SSH in via the browser (**IAP tunnel**) so no key
-or firewall setup. Setup = `sudo sh /opt/mad-arrivals/tools/backup/setup-vm.sh` after a
-clone, or the same script one-liner from GitHub raw; it installs git/python3, clones to
-`/opt/mad-arrivals`, writes the env template + cron file, and does one verification tick.
-
-**Free-plan reality:** e2-micro in us-central1/us-west1/us-east1 + 30 GB pd-standard +
-1 GB egress are the Always-Free envelope (card on file, no charges at our volume). GCE
-needs the account *upgraded* to paid to be usable; upgrading removes the trial cap but
-keeps applying the free-envelope allowances. If billing is ever suspended, the VM is
-merely stopped, nothing is lost; the site degrades to GitHub-Actions-only.
+**Install on the owner's VM** (root, one line):
+`curl -fsSL https://raw.githubusercontent.com/amouddoumad/amouddoumad.github.io/main/tools/backup/setup-vm.sh -o /tmp/setup-vm.sh && sudo sh /tmp/setup-vm.sh`
+— idempotent; installs git/python3 (apt), clones to `/opt/mad-arrivals`, writes the env
+template + cron file, does one verification tick. Then paste the PAT into
+`/etc/mad-backup.env`. Latency is irrelevant (it fetches Spanish servers from wherever
+it sits). If the box is ever unreachable, the site simply degrades to
+GitHub-Actions-only, as before.
 
 ---
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
-  cadence (§9) + independent backup runner on a free GCE VM (§12). Edit
+  cadence (§9) + independent backup runner on the owner's own always-on VM (§12). Edit
   `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
   `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
