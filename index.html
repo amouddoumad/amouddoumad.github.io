@@ -6,14 +6,6 @@
 <meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme:dark)">
 <meta name="theme-color" content="#eef2f9" media="(prefers-color-scheme:light)">
 <title>Madrid Llegadas · ¿dónde ir ahora?</title>
-<!-- Cloudflare Web Analytics: privacy-first counter (visitantes, pageviews, países,
-     referrers, dispositivos) sin cookies, así que no hace falta banner de consentimiento.
-     INACTIVE now: the page loads no third-party script until the owner enables it.
-     Enable (full recipe in HANDOFF.md section 10): Cloudflare dashboard, Web Analytics,
-     Add site, paste the 32-character token over the placeholder below, uncomment the
-     script tag, commit and push.
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"00000000000000000000000000000000"}'></script>
--->
 <style>
   :root{
     --bg:#0a0f1e; --bg2:#16223f; --card:#121c33; --card2:#0f1830; --line:#22304e;
@@ -621,5 +613,28 @@ setInterval(()=>loadData(false), 5*60*1000);              // soft refresh — ke
 setInterval(()=>{ if(!BOOTED) return; updateAge();
   const h=madridHour(); if(h!==NOW_H){ NOW_H=h; renderAll(); } }, 30*1000);
 </script>
+<!-- Visit counter beacon, talks to our Cloudflare Worker (tools/ingest-worker.js,
+     HANDOFF.md section 10). INACTIVE: nothing loads while this stays a comment.
+     To enable after deploying the Worker: replace REPLACE-WITH-YOUR-SUB below with the
+     real workers.dev subdomain, remove the wrapping comment markers, commit and push.
+     It sends only a random local id plus language and timezone. Country, device and
+     referrer are derived server side from the request; no cookies, no stored IP.
+<script>
+(function(){
+  var U="https://REPLACE-WITH-YOUR-SUB.workers.dev/h";
+  try{
+    if(location.hostname==="localhost"||location.hostname==="127.0.0.1")return;
+    if((navigator.doNotTrack||"")==="1")return;
+    var id;
+    try{id=localStorage.getItem("mad-vid");
+      if(!id){id=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+String(Math.random()).slice(2));localStorage.setItem("mad-vid",id)}
+    }catch(e){id=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+String(Math.random()).slice(2))}
+    var body=JSON.stringify({u:id,l:navigator.language||"",tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"")});
+    if(navigator.sendBeacon){navigator.sendBeacon(U,new Blob([body],{type:"text/plain"}))}
+    else{fetch(U,{method:"POST",body:body,mode:"no-cors",keepalive:true}).catch(function(){})}
+  }catch(e){}
+})();
+</script>
+-->
 </body>
 </html>

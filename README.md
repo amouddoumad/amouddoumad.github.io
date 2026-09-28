@@ -77,10 +77,11 @@ python -m http.server 8080
 - **Freshness:** data is normally ≤15 min old — an external job (cron-job.org) POSTs
   the `workflow_dispatch` API every 5 minutes, and the in-repo cron stays as a backstop.
   If the data ever gets older than 30 min, the app's header says so ("datos de hace …").
-- **Analytics (optional):** once enabled by the owner, a cookieless counter (Cloudflare
-  Web Analytics) reports visitors, countries, referrers and devices — no cookies, no IPs,
-  so no consent banner is needed. Until the token in `index.html` is filled in, the page
-  loads no third-party script at all.
+- **Analytics (optional):** once enabled by the owner, a visit counter on a Cloudflare
+  Worker (our own code, see `tools/` and HANDOFF §10) reports visitors, countries,
+  referrers and devices — no cookies, no stored IPs, country derived at Cloudflare's
+  edge. Until the beacon block in `index.html` is uncommented, the page loads no
+  third-party script at all.
 - **"Now" is always correct:** the current hour is computed in the browser from
   Europe/Madrid time, so the NOW highlight is right even between scrapes and
   regardless of the viewer's timezone.

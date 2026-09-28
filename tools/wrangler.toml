@@ -1,0 +1,12 @@
+# Cloudflare Worker: mad-arrivals visit counter (see ingest-worker.js, HANDOFF §10).
+# CLI path (needs Node):  cd tools && npx wrangler deploy
+#                        npx wrangler secret put SALT      (then paste a random string)
+#                        npx wrangler secret put STATS_KEY (random string → dashboard URL ?key=)
+# Dashboard path needs no Node at all (paste + bindings + secrets by hand).
+name = "mad-arrivals-analytics"
+main = "ingest-worker.js"
+compatibility_date = "2026-09-01"
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "madarrivals"

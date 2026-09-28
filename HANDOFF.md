@@ -311,61 +311,52 @@ counts as live.
 
 ---
 
-## 10. Visitor analytics — Cloudflare Web Analytics (snippet in place 2026-09-28)
+## 10. Visitor analytics — our own Cloudflare Worker + Analytics Engine (built 2026-09-28)
 
-GitHub Pages gives the owner nothing per visitor (Insights → Traffic is **repo**
-traffic, not the deployed site). So a cookieless beacon decides it instead: **Cloudflare
-Web Analytics** — free, no cookies ⇒ no GDPR consent banner for Spanish drivers, no IP
-addresses stored, and it still reports visitors, page views, countries, referrers and
-devices/browsers. The account also becomes useful for the CORS-proxy idea in the
-backlog. (Alternative if Cloudflare is ever refused: GoatCounter, same privacy class.)
+GitHub gives the owner nothing per visitor (Insights → Traffic is **repo** traffic,
+not the deployed site — and the old Pages hits API is proven dead: it 404s even from
+this repo's CI with `pages: read`, evidence in issue #1, don't re-try). A Cloudflare
+Web Analytics site token also hit an obstacle (github.io is not our zone to prove);
+cron-job.org can't relay visit data (its docs only allow server-side `%cjo:unixtime%`
+/ `%cjo:uuid4%` variables, no per-visitor passthrough — don't re-try either). The
+route that works with no domain-ownership anywhere in the flow: **a Cloudflare Worker
+on a `*.workers.dev` URL doing the counting**, storing into an Analytics Engine
+dataset, with a small built-in dashboard.
 
-The `<script>` sits **commented out** in the `<head>` of `index.html` — until it is
-uncommented the app loads zero third-party code. To enable (account:
-____________ — fill in after signup):
+Pieces in-repo (already written, push has happened):
 
-1. `dash.cloudflare.com` → **Web Analytics** → **Add site** → name
-   `amouddoumad.github.io` (HTTPS auto).
-2. Copy the **token** (32 hex chars) from the offered JS snippet.
-3. In `index.html`: overwrite the all-zeros placeholder token in the commented block,
-   uncomment the script line (remove the wrapping `<!--` and `-->`), commit →
-   `git pull --rebase origin main` → `git push` (§5 rules still apply).
-4. Pages serves it in ~2 min; first rows appear in the CF dashboard shortly after.
+- `tools/ingest-worker.js` — the entire Worker: `/h` ingest (country from `cf.country`,
+  device/OS/browser from User-Agent, referrer host from Referer; writes one
+  Analytics Engine datapoint; bots and DNT-headers skipped; never stores IPs —
+  Cloudflare strips them before the Worker sees the request), `/stats` JSON
+  aggregates (30 d: per-day pv/uv, per-country/referrer/device/os/browser), `/`
+  a minimal dark-mode dashboard.
+- `tools/wrangler.toml` — CLI deploy path (`cd tools && npx wrangler deploy`, then
+  `npx wrangler secret put SALT` / `put STATS_KEY`).
+- `index.html` bottom — the page-side beacon, **commented out** (until enabled the app
+  loads zero third-party code). It sends only `{u,l,tz}`: a random id kept in
+  localStorage, language, timezone. Unique visitors are counted as
+  `sha256(id|day|SALT)` — per-day uniques, not cross-day tracking.
 
-Gotchas: the app is a **single page**, so "page views" ≈ app loads (visits) — deeper
-actions (opening an hour's detail, filtering terminals) are not counted unless added
-as CF custom events (one `window.CF_BEACON.push({customEvent:true,name:'…'})` line
-each, later if wanted). CF's counter is sampling-free but aggregated: it will never
-identify individuals, by design.
+**Activation (one free Cloudflare account; ~5 min, dashboard-only, no Node needed):**
 
-### Reality check (2026-09-28) — the CF WA path is on hold, no analytics run yet
+1. `dash.cloudflare.com` → **Workers & Pages** → **Create application** → **Worker**
+   (name `mad-arrivals-analytics`) → paste the whole `tools/ingest-worker.js` → Deploy.
+   Claim a `*.workers.dev` subdomain if asked (first-time accounts only).
+2. Worker **Settings → Bindings → Add → Analytics Engine → dataset**: variable name
+   exactly `ANALYTICS`, dataset **`madarrivals`** (create it), save + deploy.
+3. **Settings → Variables and secrets → Add secret**: `SALT` = any long random string;
+   `STATS_KEY` = another random string (protects the dashboard; keep it private).
+4. Open `https://<sub>.workers.dev/?key=<STATS_KEY>` — the (still empty) dashboard
+   proves it all works.
+5. Enable the site side: in `index.html` replace `REPLACE-WITH-YOUR-SUB` in the beacon
+   block with the subdomain, delete the wrapping `<!--` / `-->`, commit →
+   `git pull --rebase origin main` → `git push` (§6 rules; don't touch `data.json`).
+6. Honesty line for the footer (Spanish UI, optional but recommended): append to the
+   `.foot` paragraph — `Contamos visitas de forma anónima (país y dispositivo, sin IP).`
 
-The owner reports the Cloudflare path "won't work" (exact error not yet known). Two
-further options were tested and REJECTED, do not re-try them:
-
-1. **GitHub's own Pages traffic API is dead.** `GET /repos/…/pages` (the old
-   `hits`/`pageviews` fields) returns **404 even from this repo's CI** with the
-   `pages: read` permission on the workflow token — evidence preserved in issue #1.
-   GitHub natively has zero site-visitor data.
-2. **cron-job.org cannot relay visit data.** Its docs (docs.cron-job.org →
-   creating-cron-jobs → variables) show only server-side variables
-   (`%cjo:unixtime%`, `%cjo:uuid4%`) — a website trigger URL cannot forward
-   per-visitor country/referrer/device into the job. No ingest chain there.
-
-Remaining viable paths (both need exactly ONE free signup on the owner's identity;
-everything else — code, wiring, dashboard setup, even clicking through the provider's
-dashboard via the browser — the agent can and will do):
-
-- **Cloudflare Worker + Analytics Engine:** ingest endpoint = a `*.workers.dev` URL,
-  so NO domain-ownership proof is ever requested — immune to the suspected github.io
-  blocker. Country from `request.cf.country`, device/UA + referrer from headers; query
-  API for the dashboard. Needs a Cloudflare account.
-- **GoatCounter:** signup = pick subdomain + email + confirm (no domain proof at all),
-  then a 2-line snippet; reports visitors/countries/referrers/devices. Privacy class
-  of CF WA, even less ceremony.
-- **CF Web Analytics proper:** keep the commented snippet in `<head>` and retry the 4
-  steps above ONLY if the real blocker was something trivial (or was only predicted by
-  an AI, not actually hit); paste the exact error and decide again.
+Fallback if Cloudflare itself is truly unavailable: GoatCounter (subdomain+email
+signup, no domain proof, 2-line snippet, equivalent reports).
 
 ---
 
@@ -394,8 +385,9 @@ dashboard via the browser — the agent can and will do):
 6. **Other stations:** Príncipe Pío (`10000`) is in the LD feed with a few terminating
    trips; Nuevos Ministerios/Recoletos have none. Add the same way as Chamartín if ever
    wanted.
-7. **Analytics depth (optional):** CF custom events for in-app actions (hour detail
-   opens, terminal filters, "Próxima hora" toggles) — one line each, once §10 is on.
+7. **Analytics depth (optional):** in-app action names (hour detail opens, terminal
+   filters, "Próxima hora" toggles) as extra beacon calls with a `name` field once §10
+   is live — one line each plus one more Analytics Engine blob.
 
 ---
 
