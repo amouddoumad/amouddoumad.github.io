@@ -1,27 +1,30 @@
 """
-Azure-side backup runner for data.json (HANDOFF.md section 12).
+Independent backup runner for data.json (HANDOFF.md section 12).
 
 Why: GitHub Actions, which normally runs scrape.py on a schedule, sometimes
-loses turns. This is an independent runner on Azure's always-free Consumption
-plan. It is a BACKUP, not a second primary:
+loses turns. This is a second runner on someone else's clock: a cron job on
+the Google Cloud Always-Free e2-micro VM (setup-vm.sh installs it). The logic
+itself is platform-agnostic and standard library only. It is a BACKUP, not a
+second primary:
 
 1. GET data.json from the GitHub Contents API. One call gives us the file
-   content (used to seed scrape.py's same-day caches), its blob sha (needed to
-   write back), and the committer date of the commit that last touched it.
+   content (used to seed scrape.py's same-day caches) and its blob sha (needed
+   to write back); a second call to the commits API gives the date of the
+   commit that last touched the file.
 2. If that commit is recent, the GitHub runner is alive — log and return.
    Threshold STALE_MIN (default 35 min). Once we pushed, the last-touching
    commit is our own, so we can't read freshness off it alone; data pushed by
-   this runner carries meta.src == "azure" and re-runs on the shorter
+   this runner carries meta.src == "backup" and re-runs on the shorter
    BACKUP_STALE (default 30 min) until the GitHub runner takes over again.
-3. Otherwise run the repo's scrape.py (OUT_PATH pointed at a scratch dir — the
-   Functions file system is read-only except /tmp), stamp meta.src, and PUT it
-   back through the Contents API with a fresh sha. On a 409 (the GitHub runner
-   pushed mid-scrape) we re-read the sha and retry once; if the file became
-   fresh meanwhile we stand down.
+3. Otherwise run the repo's scrape.py (OUT_PATH pointed at a scratch dir),
+   stamp meta.src, and PUT it back through the Contents API with a fresh sha.
+   On a 409 (the GitHub runner pushed mid-scrape) we re-read the sha and retry
+   once; if the file became fresh meanwhile we stand down.
 
-Config comes from environment variables (Azure app settings):
-GH_OWNER, GH_REPO, GITHUB_TOKEN (fine-grained PAT, Contents: read-write on
-this repo only), and optionally STALE_MIN / BACKUP_STALE.
+Config comes from environment variables (run_backup.py loads them from
+/etc/mad-backup.env on the VM): GH_OWNER, GH_REPO, GITHUB_TOKEN
+(fine-grained PAT, Contents: read-write on this repo only), and optionally
+STALE_MIN / BACKUP_STALE.
 """
 
 import base64
@@ -35,7 +38,7 @@ import urllib.error
 import urllib.request
 
 API = "https://api.github.com"
-UA = "Mozilla/5.0 (compatible; mad-arrivals-azure-backup)"
+UA = "Mozilla/5.0 (compatible; mad-arrivals-backup)"
 
 
 def _cfg(name, default=None, required=False):
@@ -97,7 +100,7 @@ def is_stale(data, pushed_at, log=print):
         return True
     age_min = (now - pushed_at).total_seconds() / 60
     src = (data or {}).get("meta", {}).get("src")
-    limit = float(_cfg("BACKUP_STALE", "30")) if src == "azure" else float(_cfg("STALE_MIN", "35"))
+    limit = float(_cfg("BACKUP_STALE", "30")) if src == "backup" else float(_cfg("STALE_MIN", "35"))
     log(f"data.json last touched {int(age_min)} min ago (writer: {src or 'github'}, stale limit {int(limit)} min)")
     return age_min > limit
 
@@ -106,9 +109,9 @@ def run_scrape(prev, tmpdir=None):
     """Run the repo's scrape.py with `prev` (the live data.json) seeded as the
     previous state, and return the freshly scraped dict, or None if the
     scraper refused to write (nothing scraped and no history)."""
-    import scrape  # deployed next to us; locally from the repo root
+    import scrape  # repo root (run_backup.py puts it on sys.path)
 
-    out = os.path.join(tmpdir or tempfile.mkdtemp(prefix="madaz-"), "data.json")
+    out = os.path.join(tmpdir or tempfile.mkdtemp(prefix="madbak-"), "data.json")
     if prev is not None:
         with open(out, "w", encoding="utf-8") as f:
             json.dump(prev, f, ensure_ascii=False)
@@ -125,10 +128,10 @@ def run_scrape(prev, tmpdir=None):
 
 def push(owner, repo, token, data, sha, log=print):
     meta = data.setdefault("meta", {})
-    meta["src"] = "azure"
-    meta["pushed_by"] = "azure-backup"
+    meta["src"] = "backup"
+    meta["pushed_by"] = "gce-backup"
     body = {
-        "message": "data: azure backup refresh",
+        "message": "data: backup refresh (independent runner)",
         "content": base64.b64encode(
             json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         ).decode(),

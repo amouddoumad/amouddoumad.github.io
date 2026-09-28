@@ -1,2 +1,0 @@
-# Only the trigger SDK. scrape.py and backup.py are standard library only.
-azure-functions>=1.22,<2

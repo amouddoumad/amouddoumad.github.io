@@ -403,70 +403,65 @@ signup, no domain proof, 2-line snippet, equivalent reports).
 
 ---
 
-## 12. Azure backup runner for data.json (built 2026-09-28, option "Azure Functions")
+## 12. Independent backup runner for data.json on a Google Cloud VM (built 2026-09-28)
 
 GitHub Actions sometimes loses scheduled turns (observed again the night this was
 built: data.json 102 min stale). The cron-job.org pinger (§9) is the fast path; this is
-the independent second runner on someone else's clock, on Azure's always-free
-Consumption plan (free grant covers a timer firing 144×/day; card required at Azure
-signup, no charge expected). Code in `tools/azure/`, deployed zip is NOT in the repo
-(`.gitignore`).
+the independent second runner on someone else's clock, on Google Cloud's **Always-Free**
+tier (a real e2-micro VM, free forever, but GCP signup requires a card for the identity
+check — trial credit $300/90 d; note the free-tier e2-micro only *stays* usable after the
+trial if the account is later upgraded to paid, which still costs nothing at our volume).
+Chosen over Azure Functions because the only Azure account available was the employer's
+tenant. Code in `tools/backup/`.
 
-**Backup, not co-primary** (`tools/azure/backup.py`, tested 2026-09-28 end-to-end
-locally: 522 flights + trains + Cercanías RT through the exact Azure entry point):
+**Backup, not co-primary** (`tools/backup/backup.py`, tested 2026-09-28 end-to-end
+locally: 522 flights + trains + Cercanías RT through the exact runner entry point):
 
-- Timer `0 */10 * * * *` (Azure 6-field cron, second first). Each tick:
+- Cron every 10 min (`/etc/cron.d/mad-backup`, flock-guarded, log
+  `/var/log/mad-backup.log`). Each tick, `run_backup.py` first `git pull`s the checkout
+  (so the VM always runs the repo's current scrape.py — one source of truth), then:
   1. GET Contents API for `data.json` (content seeds the same-day caches, `sha` is
      required for any write-back) + GET commits API `?path=data.json&per_page=1` for
      the last-commit date. Gotcha: the Contents API response has NO commit object —
      it really takes the two calls.
   2. Fresh → return. Stale if commit age > `STALE_MIN` (default **35** min). Once
-     *we* pushed, the last commit is ours, so data carrying `meta.src == "azure"`
+     *we* pushed, the last commit is ours, so data carrying `meta.src == "backup"`
      re-runs on `BACKUP_STALE` (default **30** min) until the GitHub runner takes
      over again (its pushes carry no `src`).
-  3. Stale → run the repo's `scrape.py` (imported; `OUT_PATH` pointed into a temp
-     dir — the Functions FS is read-only except `/tmp`), stamp `meta.src="azure"`,
-     `meta.pushed_by="azure-backup"`, PUT via Contents API quoting the sha. HTTP 409
-     (GitHub runner pushed mid-scrape) → re-read: fresh ⇒ stand down, stale ⇒ retry
-     once. Commit message: `data: azure backup refresh`.
-- Local checks (no Azure needed): `python tools/azure/test_backup.py` (gate only,
-  against live GitHub) and `python tools/azure/test_backup.py --scrape` (full scrape
-  into temp; never pushes).
+  3. Stale → run `scrape.py` (imported, `OUT_PATH` pointed into a temp dir), stamp
+     `meta.src="backup"` + `meta.pushed_by="gce-backup"`, PUT via Contents API quoting
+     the sha. HTTP 409 (GitHub runner pushed mid-scrape) → re-read: fresh ⇒ stand
+     down, stale ⇒ retry once. Commit message: `data: backup refresh (independent
+     runner)`. The site's freshness badge shows these pushes exactly like normal ones.
+- Config: `/etc/mad-backup.env` (chmod 600) holds `GITHUB_TOKEN` — fine-grained PAT of
+  the repo owner, Contents: read+write on `amouddoumad/amouddoumad.github.io` **only**,
+  created at github.com → Settings → Personal access tokens → Fine-grained (no
+  expiration chosen; rotate any time by revoking + editing the file). `run_backup.py
+  --dry` runs the gate without pushing — the local smoke test too (works from any
+  checkout, no VM needed).
 
-**Azure topology** (created via portal, this session): Resource group
-`mad-arrivals` / Function App `mad-arrivals-backup` / Python 3.11 / Consumption. App
-settings: `GITHUB_TOKEN` (fine-grained PAT of the repo owner, Contents: read+write on
-`amouddoumad/amouddoumad.github.io` ONLY — created at
-github.com → Settings → Personal access tokens → Fine-grained; no expiration chosen,
-rotate anytime by revoking + updating the app setting). `SCM_DO_BUILD_DURING_DEPLOYMENT=1`
-so Kudu pip-installs `azure-functions` from requirements.txt on deploy.
+**The VM** (created via console.cloud.google.com this session): project
+`mad-arrivals`, region `us-west1` (one of the three Always-Free regions; latency is
+irrelevant — it fetches Spanish servers either way), machine `e2-micro`, **pd-standard**
+30 GB disk (a pd-balanced boot disk would exceed the free grant — pick standard!),
+Debian 12/13, no external IP needed: SSH in via the browser (**IAP tunnel**) so no key
+or firewall setup. Setup = `sudo sh /opt/mad-arrivals/tools/backup/setup-vm.sh` after a
+clone, or the same script one-liner from GitHub raw; it installs git/python3, clones to
+`/opt/mad-arrivals`, writes the env template + cron file, and does one verification tick.
 
-**Deploy recipe after any code change** (works from Git Bash, no Azure CLI/Core Tools):
-`python tools/azure/make_package.py` → zip (function_app.py + host.json +
-requirements.txt + backup.py + a fresh copy of the repo-root `scrape.py`). Then portal
-Function App → **Get publish profile** (save pasted XML creds OUTSIDE the repo) →
-
-```
-curl -u "<pubuser>:<pubpass>" --data-binary @tools/azure/azfunc.zip \
-     "https://mad-arrivals-backup.scm.azurewebsites.net/api/publish"
-```
-
-(expect `{"id":...,"status":4}` then status 6 = success). Verify: Function App →
-Monitor → the timer shows a past 6 executions; or Log stream (append `?scm-do-refresh=1`
-to the scm URL / portal Logs & Troubleshoot).
-
-**Free-plan reality:** Consumption bills on executions; we use ~4,300/month against a
-1,000,000 free grant, plus a storage account for the app (free grant covers it). The
-$200/30-day trial credit is separate and will simply expire. If a card is ever removed,
-the subscription is *disabled*, not charged — re-enabling restores the app.
+**Free-plan reality:** e2-micro in us-central1/us-west1/us-east1 + 30 GB pd-standard +
+1 GB egress are the Always-Free envelope (card on file, no charges at our volume). GCE
+needs the account *upgraded* to paid to be usable; upgrading removes the trial cap but
+keeps applying the free-envelope allowances. If billing is ever suspended, the VM is
+merely stopped, nothing is lost; the site degrades to GitHub-Actions-only.
 
 ---
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
-  cadence (§9) + Azure Functions backup runner (§12). Edit `index.html`/`scrape.py`
-  locally → `git pull --rebase` → `git push`. Never touch `data.json`. Verify at ≥500px
-  and via the live `data.json`.
+  cadence (§9) + independent backup runner on a free GCE VM (§12). Edit
+  `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
+  `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
   (stops 60000 / 17000; no real-time exists for LD — live boards are blocked from CI).
   Cercanías = national Cercanías GTFS schedule (stops 18000 / 17000, cached daily) +
