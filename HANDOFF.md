@@ -311,7 +311,36 @@ counts as live.
 
 ---
 
-## 10. Improvement backlog (highest value first)
+## 10. Visitor analytics — Cloudflare Web Analytics (snippet in place 2026-09-28)
+
+GitHub Pages gives the owner nothing per visitor (Insights → Traffic is **repo**
+traffic, not the deployed site). So a cookieless beacon decides it instead: **Cloudflare
+Web Analytics** — free, no cookies ⇒ no GDPR consent banner for Spanish drivers, no IP
+addresses stored, and it still reports visitors, page views, countries, referrers and
+devices/browsers. The account also becomes useful for the CORS-proxy idea in the
+backlog. (Alternative if Cloudflare is ever refused: GoatCounter, same privacy class.)
+
+The `<script>` sits **commented out** in the `<head>` of `index.html` — until it is
+uncommented the app loads zero third-party code. To enable (account:
+____________ — fill in after signup):
+
+1. `dash.cloudflare.com` → **Web Analytics** → **Add site** → name
+   `amouddoumad.github.io` (HTTPS auto).
+2. Copy the **token** (32 hex chars) from the offered JS snippet.
+3. In `index.html`: overwrite the all-zeros placeholder token in the commented block,
+   uncomment the script line (remove the wrapping `<!--` and `-->`), commit →
+   `git pull --rebase origin main` → `git push` (§5 rules still apply).
+4. Pages serves it in ~2 min; first rows appear in the CF dashboard shortly after.
+
+Gotchas: the app is a **single page**, so "page views" ≈ app loads (visits) — deeper
+actions (opening an hour's detail, filtering terminals) are not counted unless added
+as CF custom events (one `window.CF_BEACON.push({customEvent:true,name:'…'})` line
+each, later if wanted). CF's counter is sampling-free but aggregated: it will never
+identify individuals, by design.
+
+---
+
+## 11. Improvement backlog (highest value first)
 
 1. ~~Cercanías at Atocha~~ — **DONE (2026-07-14)**: schedule + GTFS-RT real-time, own
    column in the unified hourly table, info line in the hero (out of the ranking).
@@ -336,10 +365,12 @@ counts as live.
 6. **Other stations:** Príncipe Pío (`10000`) is in the LD feed with a few terminating
    trips; Nuevos Ministerios/Recoletos have none. Add the same way as Chamartín if ever
    wanted.
+7. **Analytics depth (optional):** CF custom events for in-app actions (hour detail
+   opens, terminal filters, "Próxima hora" toggles) — one line each, once §10 is on.
 
 ---
 
-## 11. TL;DR for the impatient
+## 12. TL;DR for the impatient
 - Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
   cadence (§9). Edit `index.html`/`scrape.py` locally → `git pull --rebase` →
   `git push`. Never touch `data.json`. Verify at ≥500px and via the live `data.json`.
