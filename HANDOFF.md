@@ -407,12 +407,18 @@ signup, no domain proof, 2-line snippet, equivalent reports).
 
 GitHub Actions sometimes loses scheduled turns (observed again the night this was
 built: data.json 102 min stale). The cron-job.org pinger (§9) is the fast path; this is
-the independent second runner on someone else's clock. Home: the owner's **own always-on
-VM** — anything Debian/Ubuntu with outbound HTTPS. Code in `tools/backup/`. History, so
-nobody hunts ghosts: it was first deployed the same day onto a Google Cloud Always-Free
-e2-micro (us-west1); the owner then cancelled that plan, the VM was deleted and the GCP
-billing account closed (€0.00 ever charged) on 2026-09-28. The runner logic never cared
-where it ran and stayed untouched through the move.
+the independent second runner on someone else's clock. Home since 2026-09-28: the
+owner's always-on server **dmb5.eemcs.utwente.nl** (SSH alias `dmb5`, user `nacir`, key
+`~/.ssh/dmb5_deploy` from his Windows box): checkout `~/mad-arrivals`, token in
+`~/.mad-backup.env` (600), **user crontab `0 * * * *`** (exactly :00 every hour, flock
+`/tmp/mad-backup-nacir.lock`, log `~/mad-backup.log`). `run_backup.py` reads
+`/etc/mad-backup.env` then falls back to `~/.mad-backup.env`, so it needs no root. Code
+in `tools/backup/`. History, so nobody hunts ghosts: the runner first went onto a Google
+Cloud Always-Free e2-micro the same day; the owner cancelled that plan, the VM was
+deleted and the GCP billing account closed (€0.00 ever charged) on 2026-09-28. The
+runner logic never cared where it ran and stayed untouched through the move. If dmb5 is
+ever reinstalled, the §12 install block below restores it in one line (rootless: clone +
+env + `crontab` instead of setup-vm.sh).
 
 **Backup, not co-primary** (`tools/backup/backup.py`, tested 2026-09-28 end-to-end
 locally: 522 flights + trains + Cercanías RT through the exact runner entry point):
@@ -433,26 +439,34 @@ locally: 522 flights + trains + Cercanías RT through the exact runner entry poi
      the sha. HTTP 409 (GitHub runner pushed mid-scrape) → re-read: fresh ⇒ stand
      down, stale ⇒ retry once. Commit message: `data: backup refresh (independent
      runner)`. The site's freshness badge shows these pushes exactly like normal ones.
-- Config: `/etc/mad-backup.env` (chmod 600) holds `GITHUB_TOKEN` — fine-grained PAT of
+- Config: `/etc/mad-backup.env`, or `~/.mad-backup.env` when there is no root (chmod
+  600) holds `GITHUB_TOKEN` — fine-grained PAT of
   the repo owner, Contents: read+write on `amouddoumad/amouddoumad.github.io` **only**,
   created at github.com → Settings → Personal access tokens → Fine-grained (no
   expiration chosen; rotate any time by revoking + editing the file). `run_backup.py
   --dry` runs the gate without pushing — the local smoke test too (works from any
   checkout, no VM needed).
 
-**Install on the owner's VM** (root, one line):
+**Install (root box, one line)**:
 `curl -fsSL https://raw.githubusercontent.com/amouddoumad/amouddoumad.github.io/main/tools/backup/setup-vm.sh -o /tmp/setup-vm.sh && sudo sh /tmp/setup-vm.sh`
-— idempotent; installs git/python3 (apt), clones to `/opt/mad-arrivals`, writes the env
-template + cron file, does one verification tick. Then paste the PAT into
-`/etc/mad-backup.env`. Latency is irrelevant (it fetches Spanish servers from wherever
-it sits). If the box is ever unreachable, the site simply degrades to
-GitHub-Actions-only, as before.
+— idempotent; clones to `/opt/mad-arrivals`, writes the env template + cron file.
+
+**Install without root (what dmb5 runs)**: clone to `~/mad-arrivals`; write
+`~/.mad-backup.env` (`GITHUB_TOKEN`, `GH_OWNER`, `GH_REPO`, chmod 600); add the user
+crontab line
+
+    0 * * * * cd /home/nacir/mad-arrivals && flock -n /tmp/mad-backup-nacir.lock python3 tools/backup/run_backup.py >> /home/nacir/mad-backup.log 2>&1
+
+then paste the PAT into the env file and check with
+`cd ~/mad-arrivals && python3 tools/backup/run_backup.py --dry`. Latency is irrelevant
+(it fetches Spanish servers from wherever it sits). If the box is ever unreachable, the
+site simply degrades to GitHub-Actions-only, as before.
 
 ---
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
-  cadence (§9) + independent backup runner on the owner's own always-on VM (§12). Edit
+  cadence (§9) + independent backup runner on dmb5, cron `0 * * * *` (§12). Edit
   `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
   `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
