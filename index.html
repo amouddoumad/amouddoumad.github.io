@@ -310,6 +310,34 @@ const trainsAt=h=>TRAINS.filter(t=>t.hour===h).length;
 const trainsChAt=h=>TRAINS_CH.filter(t=>t.hour===h).length;
 const hh=h=>String(h).padStart(2,'0')+':00';
 
+/* Data age: minutes between the scrape clock recorded in meta (meta.day + the HH:MM
+   of meta.updated, both Madrid wall-clock) and Madrid wall-clock now. */
+const MONNUM={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function ageMinutes(){
+  try{
+    if(!META.day) return null;
+    const m=/^(\d{1,2})\s+([A-Za-z]{3}),\s*(\d{1,2}):(\d{2})/.exec(META.updated||'');
+    if(!m) return null;
+    const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+    const g=t=>parseInt(p.find(x=>x.type===t).value,10);
+    const [Y,Mo,D]=META.day.split('-').map(Number);
+    const min=Math.round((Date.UTC(g('year'),g('month')-1,g('day'),g('hour')%24,g('minute'))
+                         - Date.UTC(Y,Mo-1,D,+m[3],+m[4]))/60000);
+    return min>0?min:0;
+  }catch(e){ return null; }
+}
+function updateAge(){
+  const el=document.getElementById('updated');
+  if(!el||!META.updated) return;
+  let html=`· ${esDate(META.updated)}`;
+  const a=ageMinutes();
+  if(a!==null&&a>30){
+    const txt=a<90?`${a} min`:a<1440?`${Math.round(a/60)} h`:`${Math.round(a/1440)} d`;
+    html+=` · <b style="color:${a>120?'var(--now)':'var(--t3)'}">datos de hace ${txt}</b>`;
+  }
+  el.innerHTML=html;
+}
+
 /* Cercanías: apply a GTFS-RT delay/cancellation map to a cached schedule.
    Bucket per effective (delay-shifted) hour; cancellations counted at their scheduled hour. */
 function cerHours(cer,rt){
@@ -529,7 +557,7 @@ function renderAll(){
   CERH=CER.length?cerHours(CER,CER_RT):null;
   CERH_CH=CER_CH.length?cerHours(CER_CH,CER_RT_CH):null;
   renderHero(); renderCards(); renderTable(); renderCerStrip(); renderAirOrigins(); renderTrOrigins(); renderChOrigins(); renderSources();
-  document.getElementById('updated').textContent=META.updated?`· ${esDate(META.updated)}`:'';
+  updateAge();
   document.getElementById('counts').textContent=
     `${FLIGHTS.length} vuelos · LD Atocha ${TRAINS.length} · Chamartín ${TRAINS_CH.length} · `+
     `${(CER.length||CER_CH.length)?`cercanías ${CER.length}+${CER_CH.length}`:'cercanías n/d'} hoy.`;
@@ -582,7 +610,8 @@ document.getElementById('cerStrip').addEventListener('click',e=>{
 
 loadData(false);
 setInterval(()=>loadData(false), 5*60*1000);              // soft refresh — keeps scroll & state
-setInterval(()=>{ const h=madridHour(); if(BOOTED && h!==NOW_H){ NOW_H=h; renderAll(); } }, 30*1000);
+setInterval(()=>{ if(!BOOTED) return; updateAge();
+  const h=madridHour(); if(h!==NOW_H){ NOW_H=h; renderAll(); } }, 30*1000);
 </script>
 </body>
 </html>

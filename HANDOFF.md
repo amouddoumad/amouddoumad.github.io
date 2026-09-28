@@ -232,10 +232,12 @@ source failed that run.
 
 ## 8. Other constraints / facts worth knowing
 
-- **GitHub cron is best-effort**, not exact: `*/10` realistically fires every ~10–60 min and
-  can be throttled/skipped (documented GitHub behavior). The app tolerates this because NOW
-  is client-side. If reliable freshness is needed, use an **external scheduler** (cron-job.org
-  / UptimeRobot) hitting the `workflow_dispatch` API with a token stored *in that service*.
+- **GitHub cron is best-effort — and badly under-fires here.** Measured 2026-09-28:
+  the `*/10` schedule created a `schedule` event only every 2–5 h (median refresh-commit
+  gap 113 min, worst 675 min over the last 400 runs; queue delay ≈ 0 — GitHub simply
+  doesn't create the events). So the cron is a **backstop only**; the real cadence comes
+  from the external pinger (§9). The app also tolerates staleness because NOW is
+  client-side, and the header shows "datos de hace …" when the data gets old (§9 end).
 - **Encoding:** all sources are UTF-8. A Windows terminal may render accents as `�` — the
   actual bytes/data are fine. `data.json` is written `ensure_ascii=False`, UTF-8.
 - **Failure resilience:** a failed airport scrape keeps the previous flights; a failed train
@@ -254,7 +256,62 @@ real-time maps are NOT cached — they refresh on every run.)
 
 ---
 
-## 9. Improvement backlog (highest value first)
+## 9. Reliable freshness — the cron-job.org pinger (added 2026-09-28)
+
+GitHub's scheduler under-fires this repo badly (see §8): it creates a `schedule` event
+every 2–5 h instead of every 10 min. A `workflow_dispatch` run, by contrast, starts
+immediately (measured queue delay 0 min). So cadence is driven by an **external pinger
+POSTing the dispatch endpoint**, with the `*/10` cron kept as a backstop.
+
+The job (cron-job.org free plan; account: ____________________ — fill in after signup):
+
+- **URL:** `https://api.github.com/repos/amouddoumad/amouddoumad.github.io/actions/workflows/update-data.yml/dispatches`
+- **Method:** POST · **Schedule:** custom cron `*/5 * * * *` (every 5 min)
+- **Request body:** `{"ref":"main"}`
+- **HTTP headers:** `Authorization: Bearer <fine-grained PAT>` ·
+  `Content-Type: application/json` · `Accept: application/vnd.github+json`
+- **Expected HTTP status:** **204** (success, empty body). 401/403 = bad or expired
+  token, 404 = wrong URL/repo, 422 = workflow lost its `workflow_dispatch:` trigger.
+
+**The PAT:** fine-grained (github.com → Settings → Developer settings → Personal access
+tokens → Fine-grained tokens). Resource owner `amouddoumad`, **this repository only**,
+Repository permission **Actions: Read and write** — nothing else. That permission can
+only start/cancel runs on this repo: it cannot read code or secrets, cannot push — safe
+to hand to an external service. **Set the longest expiry you're comfortable with and
+calendar the renewal: when the token dies the pinger fails silently** — the backstop
+cron keeps limping along, so nobody notices until staleness is back.
+
+Manual test from any shell (expect `204`, plus a `workflow_dispatch` run within seconds
+and a `data: refresh arrivals` commit ~1 min later):
+
+```bash
+GH_PAT=github_pat_xxx curl -sS -o /dev/null -w "%{http_code}\n" -X POST \
+  -H "Authorization: Bearer $GH_PAT" -H "Accept: application/vnd.github+json" \
+  -H "Content-Type: application/json" \
+  https://api.github.com/repos/amouddoumad/amouddoumad.github.io/actions/workflows/update-data.yml/dispatches \
+  -d '{"ref":"main"}'
+```
+
+Monitoring: the Actions tab should show `workflow_dispatch` (pinger) runs interleaved
+with `schedule` (backstop) runs all day; cron-job.org's dashboard shows the job's
+response codes. Cadence check — measures real refresh-commit gaps:
+
+```bash
+git fetch -q origin main && git log origin/main --format="%ct %s" -200 \
+  | python -c "import sys,statistics;ts=[int(l.split()[0]) for l in sys.stdin if 'data: refresh' in l];g=[(a-b)/60 for a,b in zip(ts,ts[1:])];print('runs:',len(g),'median %.0f min  max %.0f min  >15min: %d'%(statistics.median(g),max(g),sum(1 for x in g if x>15)))"
+```
+
+**Healthy = median ≤ 15 min.** If it drifts back up: check the job is still active
+(cron-job.org pauses jobs on account inactivity / bouncing email) and that the PAT
+hasn't expired.
+
+The UI is honest about the residual gaps too: when `meta.updated` is older than 30 min
+the header adds "datos de hace X" (amber), red from 2 h — a driver never reads stale
+counts as live.
+
+---
+
+## 10. Improvement backlog (highest value first)
 
 1. ~~Cercanías at Atocha~~ — **DONE (2026-07-14)**: schedule + GTFS-RT real-time, own
    column in the unified hourly table, info line in the hero (out of the ranking).
@@ -270,8 +327,8 @@ real-time maps are NOT cached — they refresh on every run.)
    Worker** proxying a live board (trainoclock is itself on Cloudflare — may not work) or
    Renfe's fragile `flotaLD.json`. Weigh against the reliability we have now.
 
-4. **Reliable freshness:** add an external `workflow_dispatch` pinger (see §8) if the
-   ~10-min cadence isn't holding.
+4. ~~Reliable freshness~~ — **DONE (2026-09-28)**: cron-job.org pinger (§9) + "datos de
+   hace …" staleness badge in the header. Keep the PAT renewed and the job active.
 
 5. **City-name localization (optional):** airport origins are English ("London", "Rome");
    could map to Spanish ("Londres", "Roma"). Train origins are already Spanish (Renfe data).
@@ -282,8 +339,9 @@ real-time maps are NOT cached — they refresh on every run.)
 
 ---
 
-## 10. TL;DR for the impatient
-- Static site + GitHub cron. Edit `index.html`/`scrape.py` locally → `git pull --rebase` →
+## 11. TL;DR for the impatient
+- Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
+  cadence (§9). Edit `index.html`/`scrape.py` locally → `git pull --rebase` →
   `git push`. Never touch `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
   (stops 60000 / 17000; no real-time exists for LD — live boards are blocked from CI).
@@ -293,4 +351,5 @@ real-time maps are NOT cached — they refresh on every run.)
 - UI: one unified hourly table (terminals + Atocha LD + Chamartín LD, single-row
   header) plus a separate Cercanías 24-hour heat strip below it (tap a cell → that
   hour's detail); terminals with zero arrivals all day are hidden automatically (bye
-  T3), past hours collapsed by default, soft data refresh (no page reload).
+  T3), past hours collapsed by default, soft data refresh (no page reload), and a
+  "datos de hace …" warning in the header when the data is older than ~30 min.

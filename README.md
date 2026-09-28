@@ -8,7 +8,9 @@ to pay for.
 - `index.html` — the whole app (HTML/CSS/JS). Fetches `data.json`, renders in the browser.
 - `data.json` — the scraped arrivals data. Refreshed automatically by GitHub Actions.
 - `scrape.py` — standard-library Python scraper that writes `data.json`.
-- `.github/workflows/update-data.yml` — cron that runs the scraper every ~10 min and commits `data.json`.
+- `.github/workflows/update-data.yml` — runs the scraper and commits `data.json`; triggered
+  every ~5 min by an external pinger (cron-job.org → `workflow_dispatch`) with the GitHub
+  cron as a backstop, because GitHub's scheduled runs are best-effort and under-fire badly.
 
 ## How it works
 
@@ -72,8 +74,9 @@ python -m http.server 8080
 
 ## Notes
 
-- **Freshness:** data is at most ~10 minutes old (the cron interval). GitHub may
-  delay scheduled runs a few minutes under load.
+- **Freshness:** data is normally ≤15 min old — an external job (cron-job.org) POSTs
+  the `workflow_dispatch` API every 5 minutes, and the in-repo cron stays as a backstop.
+  If the data ever gets older than 30 min, the app's header says so ("datos de hace …").
 - **"Now" is always correct:** the current hour is computed in the browser from
   Europe/Madrid time, so the NOW highlight is right even between scrapes and
   regardless of the viewer's timezone.
