@@ -338,6 +338,35 @@ as CF custom events (one `window.CF_BEACON.push({customEvent:true,name:'…'})` 
 each, later if wanted). CF's counter is sampling-free but aggregated: it will never
 identify individuals, by design.
 
+### Reality check (2026-09-28) — the CF WA path is on hold, no analytics run yet
+
+The owner reports the Cloudflare path "won't work" (exact error not yet known). Two
+further options were tested and REJECTED, do not re-try them:
+
+1. **GitHub's own Pages traffic API is dead.** `GET /repos/…/pages` (the old
+   `hits`/`pageviews` fields) returns **404 even from this repo's CI** with the
+   `pages: read` permission on the workflow token — evidence preserved in issue #1.
+   GitHub natively has zero site-visitor data.
+2. **cron-job.org cannot relay visit data.** Its docs (docs.cron-job.org →
+   creating-cron-jobs → variables) show only server-side variables
+   (`%cjo:unixtime%`, `%cjo:uuid4%`) — a website trigger URL cannot forward
+   per-visitor country/referrer/device into the job. No ingest chain there.
+
+Remaining viable paths (both need exactly ONE free signup on the owner's identity;
+everything else — code, wiring, dashboard setup, even clicking through the provider's
+dashboard via the browser — the agent can and will do):
+
+- **Cloudflare Worker + Analytics Engine:** ingest endpoint = a `*.workers.dev` URL,
+  so NO domain-ownership proof is ever requested — immune to the suspected github.io
+  blocker. Country from `request.cf.country`, device/UA + referrer from headers; query
+  API for the dashboard. Needs a Cloudflare account.
+- **GoatCounter:** signup = pick subdomain + email + confirm (no domain proof at all),
+  then a 2-line snippet; reports visitors/countries/referrers/devices. Privacy class
+  of CF WA, even less ceremony.
+- **CF Web Analytics proper:** keep the commented snippet in `<head>` and retry the 4
+  steps above ONLY if the real blocker was something trivial (or was only predicted by
+  an AI, not actually hit); paste the exact error and decide again.
+
 ---
 
 ## 11. Improvement backlog (highest value first)
