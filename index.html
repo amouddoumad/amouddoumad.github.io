@@ -277,6 +277,7 @@
     <p class="foot">
       La <b>T4</b> incluye el satélite T4S. La hora actual se calcula en tu dispositivo (hora de Madrid).
       Datos de trenes © Renfe (datos abiertos, CC-BY 4.0). Actualización automática cada ~10 min.<br>
+      Contamos visitas de forma anónima (país y dispositivo, sin IP).<br>
       <span id="counts"></span>
     </p>
   </div>
@@ -613,15 +614,13 @@ setInterval(()=>loadData(false), 5*60*1000);              // soft refresh — ke
 setInterval(()=>{ if(!BOOTED) return; updateAge();
   const h=madridHour(); if(h!==NOW_H){ NOW_H=h; renderAll(); } }, 30*1000);
 </script>
-<!-- Visit counter beacon, talks to our Cloudflare Worker (tools/ingest-worker.js,
-     HANDOFF.md section 10). INACTIVE: nothing loads while this stays a comment.
-     To enable after deploying the Worker: replace REPLACE-WITH-YOUR-SUB below with the
-     real workers.dev subdomain, remove the wrapping comment markers, commit and push.
-     It sends only a random local id plus language and timezone. Country, device and
+<!-- Visit counter beacon → our Cloudflare Worker (tools/ingest-worker.js, HANDOFF.md §10).
+     Sends only a random local id plus language and timezone. Country, device and
      referrer are derived server side from the request; no cookies, no stored IP.
+     Dashboard: https://mad-arrivals-analytics.nacirbl.workers.dev/ (?key= required) -->
 <script>
 (function(){
-  var U="https://REPLACE-WITH-YOUR-SUB.workers.dev/h";
+  var U="https://mad-arrivals-analytics.nacirbl.workers.dev/h";
   try{
     if(location.hostname==="localhost"||location.hostname==="127.0.0.1")return;
     if((navigator.doNotTrack||"")==="1")return;
@@ -635,6 +634,5 @@ setInterval(()=>{ if(!BOOTED) return; updateAge();
   }catch(e){}
 })();
 </script>
--->
 </body>
 </html>

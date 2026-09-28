@@ -13,10 +13,15 @@
  *                    STATS_KEY secret is set).
  *   GET  /           tiny built-in dashboard (same key rule).
  *
- * Worker bindings / secrets (dashboard or wrangler, see tools/wrangler.toml):
- *   ANALYTICS  Analytics Engine dataset binding, dataset name: madarrivals
- *   SALT       secret string mixed into the daily unique-visitor hash
- *   STATS_KEY  secret string protecting /stats and /  (optional but recommended)
+ * Worker bindings / vars / secrets (dashboard or wrangler, see tools/wrangler.toml):
+ *   ANALYTICS     Analytics Engine dataset binding, dataset name: madarrivals (writes)
+ *   ACCOUNT_ID    var: Cloudflare account id (for the SQL API calls)
+ *   SALT          secret string mixed into the daily unique-visitor hash
+ *   STATS_KEY     secret string protecting /stats and /  (optional but recommended)
+ *   AE_RO_TOKEN   secret API token with Analytics:Read only — the Worker runtime's
+ *                 binding has no query() method (type defs: writeDataPoint only),
+ *                 so stats query the dataset via the Analytics Engine SQL API
+ *                 over HTTPS: POST /client/v4/accounts/<id>/analytics_engine/sql
  *
  * Uniqueness: du = sha256(deviceId | day | SALT) truncated — unique visitors can be
  * counted per day, but a visitor cannot be tracked across days without SALT.
@@ -102,21 +107,34 @@ async function ingest(request, url, env) {
 /* -------------------------------- stats ------------------------------------ */
 function dayago(n) { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); }
 
-async function q(env, sql, from) {
-  const res = await env.ANALYTICS.query(sql, [["__ANALYTICS__", "table"], [from]]);
-  return (res && res.data) || [];
+async function q(env, sql) {
+  // Analytics Engine SQL API (HTTP). The binding object in production has no
+  // query() method, only writeDataPoint — @cloudflare/workers-types confirms.
+  // This API takes RAW SQL as the body (no JSON envelope); accepted syntax:
+  // unquoted dataset name, count(), count(DISTINCT x), alias + GROUP BY alias.
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.ACCOUNT_ID}/analytics_engine/sql`, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + (env.AE_RO_TOKEN || ""), "content-type": "text/plain" },
+    body: sql,
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j) throw new Error("sql api: HTTP " + r.status);
+  return j.data || [];
 }
 
 async function stats(env, from) {
+  // writeDataPoint blob order: 1 day | 2 country | 3 device | 4 os | 5 browser | 6 refhost | 7 du | 8 tz
+  const ds = ((env.DATASET || "madarrivals").replace(/[^a-z0-9_-]/gi, ""));
+  const f = `'${from.replace(/[^0-9-]/g, "")}'`; // from = YYYY-MM-DD, generated here
   const sel = (cols, group, order, limit) =>
-    q(env, `SELECT ${cols} FROM ?? WHERE day >= ? GROUP BY ${group} ORDER BY ${order} LIMIT ${limit}`, from);
+    q(env, `SELECT ${cols} FROM ${ds} WHERE blob1 >= ${f} GROUP BY ${group} ORDER BY ${order} LIMIT ${limit}`);
   const [byDay, byCountry, byRef, byDevice, byOs, byBrowser] = await Promise.all([
-    sel("day, count(*) pv, count(DISTINCT du) uv", "day", "day", 40),
-    sel("country, count(*) pv, count(DISTINCT du) uv", "country", "pv", 20),
-    sel("refhost, count(*) pv, count(DISTINCT du) uv", "refhost", "pv", 15),
-    sel("device, count(*) pv", "device", "pv", 6),
-    sel("os, count(*) pv", "os", "pv", 8),
-    sel("browser, count(*) pv", "browser", "pv", 8),
+    sel("blob1 AS day, count() AS pv, count(DISTINCT blob7) AS uv", "day", "day", 40),
+    sel("blob2 AS country, count() AS pv, count(DISTINCT blob7) AS uv", "country", "pv DESC", 20),
+    sel("blob6 AS refhost, count() AS pv, count(DISTINCT blob7) AS uv", "refhost", "pv DESC", 15),
+    sel("blob3 AS device, count() AS pv", "device", "pv DESC", 6),
+    sel("blob4 AS os, count() AS pv", "os", "pv DESC", 8),
+    sel("blob5 AS browser, count() AS pv", "browser", "pv DESC", 8),
   ]);
   return json({ from, generatedAt: new Date().toISOString(), byDay, byCountry, byRef, byDevice, byOs, byBrowser });
 }

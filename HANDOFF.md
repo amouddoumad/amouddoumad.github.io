@@ -323,7 +323,7 @@ route that works with no domain-ownership anywhere in the flow: **a Cloudflare W
 on a `*.workers.dev` URL doing the counting**, storing into an Analytics Engine
 dataset, with a small built-in dashboard.
 
-Pieces in-repo (already written, push has happened):
+Pieces in-repo:
 
 - `tools/ingest-worker.js` — the entire Worker: `/h` ingest (country from `cf.country`,
   device/OS/browser from User-Agent, referrer host from Referer; writes one
@@ -331,29 +331,41 @@ Pieces in-repo (already written, push has happened):
   Cloudflare strips them before the Worker sees the request), `/stats` JSON
   aggregates (30 d: per-day pv/uv, per-country/referrer/device/os/browser), `/`
   a minimal dark-mode dashboard.
-- `tools/wrangler.toml` — CLI deploy path (`cd tools && npx wrangler deploy`, then
-  `npx wrangler secret put SALT` / `put STATS_KEY`).
-- `index.html` bottom — the page-side beacon, **commented out** (until enabled the app
-  loads zero third-party code). It sends only `{u,l,tz}`: a random id kept in
-  localStorage, language, timezone. Unique visitors are counted as
-  `sha256(id|day|SALT)` — per-day uniques, not cross-day tracking.
+- `tools/wrangler.toml` — CLI deploy path (see redeploy steps below).
+- `index.html` bottom — the page-side beacon, **live since 2026-09-28** (deployed
+  below). It sends only `{u,l,tz}`: a random id kept in localStorage, language,
+  timezone. Unique visitors are counted as `sha256(id|day|SALT)` — per-day uniques,
+  not cross-day tracking.
 
-**Activation (one free Cloudflare account; ~5 min, dashboard-only, no Node needed):**
+**DEPLOYED 2026-09-28 (agent-driven via dashboard + wrangler):**
 
-1. `dash.cloudflare.com` → **Workers & Pages** → **Create application** → **Worker**
-   (name `mad-arrivals-analytics`) → paste the whole `tools/ingest-worker.js` → Deploy.
-   Claim a `*.workers.dev` subdomain if asked (first-time accounts only).
-2. Worker **Settings → Bindings → Add → Analytics Engine → dataset**: variable name
-   exactly `ANALYTICS`, dataset **`madarrivals`** (create it), save + deploy.
-3. **Settings → Variables and secrets → Add secret**: `SALT` = any long random string;
-   `STATS_KEY` = another random string (protects the dashboard; keep it private).
-4. Open `https://<sub>.workers.dev/?key=<STATS_KEY>` — the (still empty) dashboard
-   proves it all works.
-5. Enable the site side: in `index.html` replace `REPLACE-WITH-YOUR-SUB` in the beacon
-   block with the subdomain, delete the wrapping `<!--` / `-->`, commit →
-   `git pull --rebase origin main` → `git push` (§6 rules; don't touch `data.json`).
-6. Honesty line for the footer (Spanish UI, optional but recommended): append to the
-   `.foot` paragraph — `Contamos visitas de forma anónima (país y dispositivo, sin IP).`
+- Worker: `mad-arrivals-analytics` → **https://mad-arrivals-analytics.nacirbl.workers.dev**
+  (account `a44b92587fcd74d0fd29ec7af18fc54e`, Google-login account Nacirbl@gmail.com).
+  Dashboard URL = that URL + `/?key=<STATS_KEY>`.
+- Dataset `madarrivals`, binding `ANALYTICS` (created via Analytics Engine → Create Dataset;
+  the dataset list stays empty until the first write — normal).
+- Secrets: `SALT` (random 32-char string), `STATS_KEY` (random 16-char string, given to
+  the operator in chat 2026-09-28; not in this repo), `AE_RO_TOKEN` (the API token
+  "mad-arrivals-analytics deploy" — Edit Cloudflare Workers template — reused as the
+  stats-query token; the token lives in dashboard → API tokens, value never committed).
+- **The binding has no `query()` method in production** (types: `writeDataPoint` only) —
+  `/stats` therefore queries via the Analytics Engine **SQL API over HTTPS**
+  (`POST api.cloudflare.com/client/v4/accounts/<id>/analytics_engine/sql`, raw SQL as the
+  body, no JSON envelope). Accepted syntax there: unquoted dataset name, `count()`,
+  `count(DISTINCT x)`, alias + `GROUP BY <alias>` (bare `count(*)` and backticks are
+  rejected; blob columns are `blob1…blob20`, no underscore). Verified live same day.
+- Site: beacon enabled in `index.html`, footer honesty line added, verified the row
+  shows once pushed; `wrangler deploy` runs clean from `tools/` with
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` env vars.
+
+**Redeploy / rotate (e.g. next time code changes):**
+
+1. `cd tools` → `npx wrangler deploy` with `CLOUDFLARE_API_TOKEN` (the dashboard token;
+   if deleted/expired, recreate with the *Edit Cloudflare Workers* template) and
+   `CLOUDFLARE_ACCOUNT_ID` set in the env. Secrets survive redeploys.
+2. Rotate `STATS_KEY`/`SALT`/`AE_RO_TOKEN` with `npx wrangler secret put <NAME>`.
+3. If `SALT`/`STATS_KEY` values are lost, just put new random ones (old `du` hashes
+   become unlinkable — irrelevant for aggregates) and share the new dashboard link.
 
 Fallback if Cloudflare itself is truly unavailable: GoatCounter (subdomain+email
 signup, no domain proof, 2-line snippet, equivalent reports).

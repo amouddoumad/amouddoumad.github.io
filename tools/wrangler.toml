@@ -10,3 +10,11 @@ compatibility_date = "2026-09-01"
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
 dataset = "madarrivals"
+
+[vars]
+ACCOUNT_ID = "a44b92587fcd74d0fd29ec7af18fc54e"
+DATASET = "madarrivals"
+# secret AE_RO_TOKEN (API token with Analytics:Read only) is also required for
+# /stats to work — the production Worker binding has no query() method, so the
+# Worker calls the Analytics Engine SQL API over HTTPS with this token:
+#   npx wrangler secret put AE_RO_TOKEN   (paste the token value)
