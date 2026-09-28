@@ -7,7 +7,7 @@ on:
     paths: [".github/workflows/pages-hits-probe.yml"]
   workflow_dispatch: {}
 permissions:
-  contents: read
+  contents: write
   pages: read
 jobs:
   probe:
@@ -24,5 +24,11 @@ jobs:
           jq '.pageviews' pages.json
           echo "--- last 10 hits ---"
           jq '.hits | if . then .[-10:] else "NO HITS FIELD" end' pages.json
-          echo "--- hit-day count + freshest ---"
-          jq '.hits | if . then {n: length, newest: .[-1].date} else "none" end' pages.json
+      - name: Publish result as a file
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mv pages.json pages-probe.json
+          git add pages-probe.json
+          git commit -m "probe: pages hits snapshot"
+          git push
