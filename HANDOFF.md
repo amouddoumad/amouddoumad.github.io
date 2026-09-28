@@ -403,10 +403,70 @@ signup, no domain proof, 2-line snippet, equivalent reports).
 
 ---
 
-## 12. TL;DR for the impatient
+## 12. Azure backup runner for data.json (built 2026-09-28, option "Azure Functions")
+
+GitHub Actions sometimes loses scheduled turns (observed again the night this was
+built: data.json 102 min stale). The cron-job.org pinger (§9) is the fast path; this is
+the independent second runner on someone else's clock, on Azure's always-free
+Consumption plan (free grant covers a timer firing 144×/day; card required at Azure
+signup, no charge expected). Code in `tools/azure/`, deployed zip is NOT in the repo
+(`.gitignore`).
+
+**Backup, not co-primary** (`tools/azure/backup.py`, tested 2026-09-28 end-to-end
+locally: 522 flights + trains + Cercanías RT through the exact Azure entry point):
+
+- Timer `0 */10 * * * *` (Azure 6-field cron, second first). Each tick:
+  1. GET Contents API for `data.json` (content seeds the same-day caches, `sha` is
+     required for any write-back) + GET commits API `?path=data.json&per_page=1` for
+     the last-commit date. Gotcha: the Contents API response has NO commit object —
+     it really takes the two calls.
+  2. Fresh → return. Stale if commit age > `STALE_MIN` (default **35** min). Once
+     *we* pushed, the last commit is ours, so data carrying `meta.src == "azure"`
+     re-runs on `BACKUP_STALE` (default **30** min) until the GitHub runner takes
+     over again (its pushes carry no `src`).
+  3. Stale → run the repo's `scrape.py` (imported; `OUT_PATH` pointed into a temp
+     dir — the Functions FS is read-only except `/tmp`), stamp `meta.src="azure"`,
+     `meta.pushed_by="azure-backup"`, PUT via Contents API quoting the sha. HTTP 409
+     (GitHub runner pushed mid-scrape) → re-read: fresh ⇒ stand down, stale ⇒ retry
+     once. Commit message: `data: azure backup refresh`.
+- Local checks (no Azure needed): `python tools/azure/test_backup.py` (gate only,
+  against live GitHub) and `python tools/azure/test_backup.py --scrape` (full scrape
+  into temp; never pushes).
+
+**Azure topology** (created via portal, this session): Resource group
+`mad-arrivals` / Function App `mad-arrivals-backup` / Python 3.11 / Consumption. App
+settings: `GITHUB_TOKEN` (fine-grained PAT of the repo owner, Contents: read+write on
+`amouddoumad/amouddoumad.github.io` ONLY — created at
+github.com → Settings → Personal access tokens → Fine-grained; no expiration chosen,
+rotate anytime by revoking + updating the app setting). `SCM_DO_BUILD_DURING_DEPLOYMENT=1`
+so Kudu pip-installs `azure-functions` from requirements.txt on deploy.
+
+**Deploy recipe after any code change** (works from Git Bash, no Azure CLI/Core Tools):
+`python tools/azure/make_package.py` → zip (function_app.py + host.json +
+requirements.txt + backup.py + a fresh copy of the repo-root `scrape.py`). Then portal
+Function App → **Get publish profile** (save pasted XML creds OUTSIDE the repo) →
+
+```
+curl -u "<pubuser>:<pubpass>" --data-binary @tools/azure/azfunc.zip \
+     "https://mad-arrivals-backup.scm.azurewebsites.net/api/publish"
+```
+
+(expect `{"id":...,"status":4}` then status 6 = success). Verify: Function App →
+Monitor → the timer shows a past 6 executions; or Log stream (append `?scm-do-refresh=1`
+to the scm URL / portal Logs & Troubleshoot).
+
+**Free-plan reality:** Consumption bills on executions; we use ~4,300/month against a
+1,000,000 free grant, plus a storage account for the app (free grant covers it). The
+$200/30-day trial credit is separate and will simply expire. If a card is ever removed,
+the subscription is *disabled*, not charged — re-enabling restores the app.
+
+---
+
+## 13. TL;DR for the impatient
 - Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
-  cadence (§9). Edit `index.html`/`scrape.py` locally → `git pull --rebase` →
-  `git push`. Never touch `data.json`. Verify at ≥500px and via the live `data.json`.
+  cadence (§9) + Azure Functions backup runner (§12). Edit `index.html`/`scrape.py`
+  locally → `git pull --rebase` → `git push`. Never touch `data.json`. Verify at ≥500px
+  and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
   (stops 60000 / 17000; no real-time exists for LD — live boards are blocked from CI).
   Cercanías = national Cercanías GTFS schedule (stops 18000 / 17000, cached daily) +
