@@ -1,0 +1,28 @@
+name: Pages traffic probe (throwaway)
+# Temporary: verifies whether GitHub still records real Pages hits/pageviews for
+# this site (the /pages REST API data). Reading the answer = delete this file.
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/pages-hits-probe.yml"]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  pages: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Pages site stats
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "GET /repos/$GITHUB_REPOSITORY/pages"
+          curl -sS -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" > pages.json
+          echo "--- pageviews ---"
+          jq '.pageviews' pages.json
+          echo "--- last 10 hits ---"
+          jq '.hits | if . then .[-10:] else "NO HITS FIELD" end' pages.json
+          echo "--- hit-day count + freshest ---"
+          jq '.hits | if . then {n: length, newest: .[-1].date} else "none" end' pages.json
