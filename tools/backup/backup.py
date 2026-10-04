@@ -163,7 +163,15 @@ def push(owner, repo, token, data, sha, log=print):
 def run_once(log=print, dry=False):
     owner = _cfg("GH_OWNER", "amouddoumad")
     repo = _cfg("GH_REPO", "amouddoumad.github.io")
-    token = _cfg("GITHUB_TOKEN", required=not dry)
+    token = _cfg("GITHUB_TOKEN", "")
+    if not token or token.startswith("PASTE-"):
+        # A host with no token filled in must NOT scrape: it would load
+        # Renfe/airport for nothing it cannot write back. A dry tick may
+        # still run the gate anonymously.
+        if not dry:
+            log("GITHUB_TOKEN missing or placeholder — standing down")
+            return "no-token"
+        token = None
     data, sha, when = read_current(owner, repo, token)
     if not is_stale(data, when, log):
         return "skipped-fresh"
