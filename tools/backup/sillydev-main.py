@@ -35,7 +35,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RUN = os.path.join(HERE, "run")
 ENV = os.environ.get("MAD_BACKUP_ENV", os.path.join(HERE, "mad-backup.env"))
 TICK = int(os.environ.get("TICK", "300"))
-URL = "https://github.com/amouddoumad/amouddoumad.github.io/archive/refs/heads/main.tar.gz"
+OWNER = os.environ.get("GH_OWNER", "amouddoumad")
+REPO = os.environ.get("GH_REPO", "amouddoumad.github.io")
+SHA_URL = f"https://api.github.com/repos/{OWNER}/{REPO}/commits/main?per_page=1"
+TAR_URL = f"https://github.com/{OWNER}/{REPO}/archive/refs/heads/main.tar.gz"
 WANT = {"scrape.py", "tools/backup/backup.py", "tools/backup/run_backup.py"}
 UA = "Mozilla/5.0 (compatible; mad-arrivals-backup)"
 
@@ -44,10 +47,34 @@ def log(msg):
     print(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"), msg, flush=True)
 
 
+def _get_json(url):
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        import json as _json
+        return _json.load(r)
+
+
+def live_sha():
+    """HEAD sha of main, or None if GitHub is unreachable / rate-limited."""
+    try:
+        return (_get_json(SHA_URL) or {}).get("sha")
+    except Exception:
+        return None
+
+
 def sync():
-    """(Re)write run/scrape.py + run/tools/backup/*.py from main."""
-    req = urllib.request.Request(URL, headers={"User-Agent": UA})
+    """Refresh run/ only when main actually moved. The tarball URL is
+    CDN-cached (~5 min), so we fetch it at most once per code change, with
+    a cache-buster — cheaper for the free host (no MBs every 5 min) and
+    never runs stale code."""
     os.makedirs(RUN, exist_ok=True)
+    sha_path = os.path.join(RUN, ".sha")
+    cached = open(sha_path).read().strip() if os.path.exists(sha_path) else ""
+    need = all(os.path.exists(os.path.join(RUN, w)) for w in WANT)
+    sha = live_sha()
+    if need and (not sha or sha == cached):
+        return
+    req = urllib.request.Request(f"{TAR_URL}?cb={sha or int(time.time())}", headers={"User-Agent": UA})
     raw = urllib.request.urlopen(req, timeout=90).read()  # buffer: tarfile cannot seek an HTTP stream
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as t:
         members = []
@@ -67,6 +94,10 @@ def sync():
             t.extractall(RUN, members=members, filter="data")
         except TypeError:  # Python < 3.11.4 has no filter= kwarg
             t.extractall(RUN, members=members)
+    fresh = live_sha()  # what we actually just unpacked
+    if fresh:
+        open(sha_path, "w").write(fresh)
+    log(f"synced run/ at {(fresh or sha or '?')[:10]}")
 
 
 def tick():
