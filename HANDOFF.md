@@ -443,11 +443,14 @@ locally: 522 flights + trains + Cercanías RT through the exact runner entry poi
      down, stale ⇒ retry once. Commit message: `data: backup refresh (independent
      runner)`. The site's freshness badge shows these pushes exactly like normal ones.
 - Config: `/etc/mad-backup.env`, or `~/.mad-backup.env` when there is no root (chmod
-  600) holds `GITHUB_TOKEN` — a token of the repo **owner** account with Contents:
-  read+write on `amouddoumad/amouddoumad.github.io` **only**. Note: fine-grained
-  tokens cannot scope another account's repo, so from a non-owner GitHub login the
-  only workable form is a *classic* PAT with `repo` scope, created while signed in as
-  `amouddoumad`. Current state on dmb5: the file holds an OAuth token copied from the
+  600) holds `GITHUB_TOKEN` — a token that can push to
+  `amouddoumad/amouddoumad.github.io`. Two facts learned the hard way: fine-grained
+  tokens can only scope the creating account's own repos (the repo picker cannot even
+  find this one from the owner's personal account), whereas a **classic** PAT behaves
+  like the session it came from — a classic token (`repo` scope) created from the
+  owner's `Nacirbl` session pushes fine here, which is what the sillydev runner uses
+  (created 2026-10-04 after a 2FA sudo prompt, no expiration, verified `push:true` via
+  the API). Current state on dmb5: the file holds an OAuth token copied from the
   owner's desktop Git credential store (push permission verified before reuse) —
   revoking his GitHub session or rotating his password kills the dmb5 runner, so the
   first maintenance task there is replacing it with a dedicated token. `run_backup.py
@@ -471,28 +474,32 @@ then paste the PAT into the env file and check with
 (it fetches Spanish servers from wherever it sits). If the box is ever unreachable, the
 site simply degrades to GitHub-Actions-only, as before.
 
-**Third runner on Silly Development (added 2026-10-04)** — a free ad-funded
-Pterodactyl host, sillydev.co.uk (owner's panel account `nacirbl@gmail.com`, server
-**mad-backup**, id `7fe090e1`; free tier: 25% CPU, 256 MiB RAM, 512 MiB disk, 24/7,
-no sleeps, no renewals). The host's AUP bans *"web scraping at scale … requesting a
-site far more often than a person would"*, so this runner must stay an **observer by
-default, scraper only in an outage**: supervisor `tools/backup/sillydev-main.py` loops
-every 300 s, and each tick only runs the same gate (`run_backup.py` from a `run/`
-self-sync dir); it scrapes solely when data.json is 35+ min stale, so normal days cost
-two GitHub API reads per tick and zero Renfe/airport traffic. Deployment is the
-panel's **GitHub tab → Public URL** (repo URL, branch `main`, folder `/`); "App py
-file" startup variable = `tools/backup/sillydev-main.py`. Free deploys are manual and
-rate-limited (one per 450 s); the supervisor fetches its own updates via sha-gated
-tarball sync instead. Gotchas: panel sessions expire (ads on free tier), servers do
-not always autostart after a host restart, and a *brand-new* unused server is deleted
-after 7 days — a running one is kept. Verified at deploy: console shows
-`supervisor up; tick every 300s` / `synced run/ at 352da90…` / `backup tick:
-no-token` / `tick exit 0`. To arm it: create a **classic** PAT (`repo` scope only)
-signed in as `amouddoumad`, then put `GITHUB_TOKEN=…` in
-`/home/container/tools/backup/mad-backup.env` via the panel Files editor (the panel's
-standard client API is stripped on this fork; file writes go through the file-manager
-editor UI). Until then the no-token guard keeps it inert — it observes, never pushes,
-never scrapes.
+**Third runner on Silly Development = the primary 5-min writer (2026-10-04)** — a
+free ad-funded Pterodactyl host, sillydev.co.uk (owner's panel account
+`nacirbl@gmail.com`, server **mad-backup**, id `7fe090e1`; free tier: 25% CPU,
+256 MiB RAM, 512 MiB disk, 24/7, no sleeps, no renewals). Supervisor
+`tools/backup/sillydev-main.py` loops every 300 s, sha-gated tarball self-sync into
+`run/`, then runs `run_backup.py`. Config lives in
+`/home/container/tools/backup/mad-backup.env` (created and edited through the panel
+Files editor — the panel's standard client API is stripped on this fork): classic PAT
+from the `Nacirbl` session (see Config note above) plus **`STALE_MIN=0` and
+`BACKUP_STALE=0`**, i.e. scrape-and-push on every tick, chosen by the owner on
+2026-10-04 when he retired dmb5. His decision explicitly accepts the AUP tension: the
+host bans *"requesting a site far more often than a person would"*, so this server
+may one day simply vanish — if it does, nothing breaks beyond losing a writer (GitHub
+cron + the §9 pinger still refresh the site; losing the free account is the max
+damage). First armed push verified same day: `data: backup refresh (independent
+runner)` at 12:48:27Z, `meta.src=backup` / `pushed_by=backup-runner` (~6 s thanks to
+the same-day caches the gate seeds). Deployment is the panel's **GitHub tab → Public
+URL** (repo URL, branch `main`, folder `/`); "App py file" startup variable =
+`tools/backup/sillydev-main.py`. Free deploys are manual, rate-limited (one per
+450 s), and overwrite repo files in the checkout — the env file is NOT in the repo,
+so redeploys spare it. Gotchas: panel sessions expire, servers do not always
+autostart after a host restart, a *brand-new* unused server is deleted after 7 days
+(a running one is kept), and the commit log now shows one data commit per 5 min from
+this box. **dmb5 retirement is on the owner**: `crontab -l | grep -v 'run_backup.py'
+| crontab -` over SSH (my key was deleted at his request), and `rm ~/.mad-backup.env`
+to drop the copy of his desktop OAuth token.
 
 ---
 
