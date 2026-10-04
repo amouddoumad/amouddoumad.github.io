@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Long-running supervisor for the backup runner on a Silly Development
-(Pterodactyl) free server. Panel start command:  python3 sillydev-main.py
+(Pterodactyl) free server. Uploaded to the panel AS main.py and started
+with:  python3 main.py
 
 Their panel expects ONE persistent process and offers no root or cron, so
 this loop plays the role cron plays on dmb5: every TICK seconds (default
