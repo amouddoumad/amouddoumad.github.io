@@ -408,8 +408,11 @@ signup, no domain proof, 2-line snippet, equivalent reports).
 GitHub Actions sometimes loses scheduled turns (observed again the night this was
 built: data.json 102 min stale). The cron-job.org pinger (§9) is the fast path; this is
 the independent second runner on someone else's clock. Home since 2026-09-28: the
-owner's always-on server **dmb5.eemcs.utwente.nl** (SSH alias `dmb5`, user `nacir`, key
-`~/.ssh/dmb5_deploy` from his Windows box): checkout `~/mad-arrivals`, token in
+owner's always-on server **dmb5.eemcs.utwente.nl** (SSH alias `dmb5`, user `nacir`;
+the automation key was deleted at the owner's request on 2026-10-04, so future
+maintenance there needs him typing his university password — a copy of the removed
+authorized_keys entry sits on the server as `~/.ssh/authorized_keys.bak-20260928`
+should it ever need re-authorizing): checkout `~/mad-arrivals`, token in
 `~/.mad-backup.env` (600), **user crontab `0 * * * *`** (exactly :00 every hour, flock
 `/tmp/mad-backup-nacir.lock`, log `~/mad-backup.log`). `run_backup.py` reads
 `/etc/mad-backup.env` then falls back to `~/.mad-backup.env`, so it needs no root. Code
@@ -440,12 +443,18 @@ locally: 522 flights + trains + Cercanías RT through the exact runner entry poi
      down, stale ⇒ retry once. Commit message: `data: backup refresh (independent
      runner)`. The site's freshness badge shows these pushes exactly like normal ones.
 - Config: `/etc/mad-backup.env`, or `~/.mad-backup.env` when there is no root (chmod
-  600) holds `GITHUB_TOKEN` — fine-grained PAT of
-  the repo owner, Contents: read+write on `amouddoumad/amouddoumad.github.io` **only**,
-  created at github.com → Settings → Personal access tokens → Fine-grained (no
-  expiration chosen; rotate any time by revoking + editing the file). `run_backup.py
+  600) holds `GITHUB_TOKEN` — a token of the repo **owner** account with Contents:
+  read+write on `amouddoumad/amouddoumad.github.io` **only**. Note: fine-grained
+  tokens cannot scope another account's repo, so from a non-owner GitHub login the
+  only workable form is a *classic* PAT with `repo` scope, created while signed in as
+  `amouddoumad`. Current state on dmb5: the file holds an OAuth token copied from the
+  owner's desktop Git credential store (push permission verified before reuse) —
+  revoking his GitHub session or rotating his password kills the dmb5 runner, so the
+  first maintenance task there is replacing it with a dedicated token. `run_backup.py
   --dry` runs the gate without pushing — the local smoke test too (works from any
-  checkout, no VM needed).
+  checkout, no VM needed). Without any token the runner **stands down and never
+  scrapes** (`backup tick: no-token`) — a host with an empty token cannot write, so
+  it must not load Renfe/airport for nothing.
 
 **Install (root box, one line)**:
 `curl -fsSL https://raw.githubusercontent.com/amouddoumad/amouddoumad.github.io/main/tools/backup/setup-vm.sh -o /tmp/setup-vm.sh && sudo sh /tmp/setup-vm.sh`
@@ -462,11 +471,35 @@ then paste the PAT into the env file and check with
 (it fetches Spanish servers from wherever it sits). If the box is ever unreachable, the
 site simply degrades to GitHub-Actions-only, as before.
 
+**Third runner on Silly Development (added 2026-10-04)** — a free ad-funded
+Pterodactyl host, sillydev.co.uk (owner's panel account `nacirbl@gmail.com`, server
+**mad-backup**, id `7fe090e1`; free tier: 25% CPU, 256 MiB RAM, 512 MiB disk, 24/7,
+no sleeps, no renewals). The host's AUP bans *"web scraping at scale … requesting a
+site far more often than a person would"*, so this runner must stay an **observer by
+default, scraper only in an outage**: supervisor `tools/backup/sillydev-main.py` loops
+every 300 s, and each tick only runs the same gate (`run_backup.py` from a `run/`
+self-sync dir); it scrapes solely when data.json is 35+ min stale, so normal days cost
+two GitHub API reads per tick and zero Renfe/airport traffic. Deployment is the
+panel's **GitHub tab → Public URL** (repo URL, branch `main`, folder `/`); "App py
+file" startup variable = `tools/backup/sillydev-main.py`. Free deploys are manual and
+rate-limited (one per 450 s); the supervisor fetches its own updates via sha-gated
+tarball sync instead. Gotchas: panel sessions expire (ads on free tier), servers do
+not always autostart after a host restart, and a *brand-new* unused server is deleted
+after 7 days — a running one is kept. Verified at deploy: console shows
+`supervisor up; tick every 300s` / `synced run/ at 352da90…` / `backup tick:
+no-token` / `tick exit 0`. To arm it: create a **classic** PAT (`repo` scope only)
+signed in as `amouddoumad`, then put `GITHUB_TOKEN=…` in
+`/home/container/tools/backup/mad-backup.env` via the panel Files editor (the panel's
+standard client API is stripped on this fork; file writes go through the file-manager
+editor UI). Until then the no-token guard keeps it inert — it observes, never pushes,
+never scrapes.
+
 ---
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
-  cadence (§9) + independent backup runner on dmb5, cron `0 * * * *` (§12). Edit
+  cadence (§9) + independent backup runner on dmb5, cron `0 * * * *`, and a token-
+  armed-when-given standby on sillydev, 5-min observer loop (§12). Edit
   `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
   `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
