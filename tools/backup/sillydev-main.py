@@ -4,15 +4,21 @@
 with:  python3 main.py
 
 Their panel expects ONE persistent process and offers no root or cron, so
-this loop plays the role cron plays on dmb5: every TICK seconds (default
-300 = 5 min) it
+this loop plays the role cron plays on dmb5. It fires on minute-of-hour
+SLOTS (env SLOT_MIN, default "5,20,35,50") — four times an hour, four
+minutes after GitHub's slots (:01/:16/:31/:46), so on a healthy hour it
+sees data <8 min old and stands down without scraping; it scrapes and
+pushes only when GitHub's slot was missed (gate: STALE_MIN/BACKUP_STALE
+in mad-backup.env). Each fire:
   1. downloads the main-branch tarball from GitHub (stdlib only, no git
      binary needed) and unpacks scrape.py + tools/backup/ into ./run/,
      keeping the checkout layout (run_backup.py locates scrape.py relative
      to itself), so the repo stays the one source of truth;
   2. runs one tick of tools/backup/run_backup.py as a subprocess (a crash
      in a tick never kills the supervisor);
-  3. sleeps to the next boundary.
+  3. between fires it polls the clock every POLL seconds and still checks
+     for new code (tarball sync) at most once per SYNC_EVERY seconds — the
+     shared-IP GitHub rate limit is the reason that is capped.
 
 The GitHub token lives in mad-backup.env next to this file — never inside
 run/, which gets overwritten by the tarball. It is passed via
@@ -35,7 +41,9 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUN = os.path.join(HERE, "run")
 ENV = os.environ.get("MAD_BACKUP_ENV", os.path.join(HERE, "mad-backup.env"))
-TICK = int(os.environ.get("TICK", "300"))
+SLOTS = frozenset(int(x) for x in os.environ.get("SLOT_MIN", "5,20,35,50").split(",") if x.strip())
+POLL = int(os.environ.get("POLL", "20"))          # clock check interval between fires
+SYNC_EVERY = int(os.environ.get("SYNC_EVERY", "300"))  # cap sha-gated code checks (rate limit)
 OWNER = os.environ.get("GH_OWNER", "amouddoumad")
 REPO = os.environ.get("GH_REPO", "amouddoumad.github.io")
 SHA_URL = f"https://api.github.com/repos/{OWNER}/{REPO}/commits/main?per_page=1"
@@ -109,16 +117,28 @@ def tick():
 
 
 def main():
-    log(f"supervisor up; tick every {TICK}s; env file {ENV}")
+    log(f"supervisor up; slots {sorted(SLOTS)} min of hour; env file {ENV}")
+    last_fire = None   # (hour, minute) already acted on
+    last_sync = 0.0
     while True:
-        start = time.time()
-        try:
-            sync()
-            code = tick()
-            log(f"tick exit {code}")
-        except Exception as e:
-            log(f"tick failed: {type(e).__name__}: {e}")
-        time.sleep(max(5, TICK - (time.time() - start)))
+        now = datetime.datetime.now(datetime.timezone.utc)
+        key = (now.hour, now.minute)
+        if now.minute in SLOTS and key != last_fire:
+            last_fire = key
+            try:
+                sync()
+                code = tick()
+                log(f"tick exit {code}")
+            except Exception as e:
+                log(f"tick failed: {type(e).__name__}: {e}")
+            last_sync = time.time()  # sync() just ran inside the fire
+        elif time.time() - last_sync >= SYNC_EVERY:
+            last_sync = time.time()
+            try:
+                sync()
+            except Exception as e:
+                log(f"sync failed: {type(e).__name__}: {e}")
+        time.sleep(POLL)
 
 
 if __name__ == "__main__":

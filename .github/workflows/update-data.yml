@@ -2,10 +2,11 @@ name: Update arrivals data
 
 on:
   schedule:
-    # Every 10 minutes (UTC). GitHub may delay scheduled runs a few minutes under load.
-    - cron: "*/10 * * * *"
+    # 4× per hour at :01/:16/:31/:46 (owner's call 2026-10-04: GitHub queues could
+    # not absorb the pinger's 12 runs/h). Pinger (HANDOFF §9) pings the same slots.
+    - cron: "1,16,31,46 * * * *"
   workflow_dispatch: {}        # manual run from the Actions tab AND the cron-job.org pinger
-                               # that guarantees the ~5-min cadence (HANDOFF §9); the
+                               # that guarantees the cadence (HANDOFF §9); the
                                # schedule: below is only a backstop — GitHub under-fires it
   push:
     branches: [ main ]
@@ -41,6 +42,10 @@ jobs:
           if [ -n "$(git status --porcelain data.json)" ]; then
             git add data.json
             git commit -m "data: refresh arrivals"
+            # an independent runner may have pushed data.json mid-scrape; rebase so
+            # the push lands, and if data.json itself conflicts, the remote commit
+            # is the newer one — drop ours rather than fail the run.
+            git pull --rebase origin main || { git rebase --abort; echo "remote data.json is newer — dropping our commit"; exit 0; }
             git push
           else
             echo "No change in data.json"
