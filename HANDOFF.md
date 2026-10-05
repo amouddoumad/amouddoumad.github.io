@@ -266,7 +266,11 @@ POSTing the dispatch endpoint**, with the `*/10` cron kept as a backstop.
 The job (cron-job.org free plan; account: ____________________ — fill in after signup):
 
 - **URL:** `https://api.github.com/repos/amouddoumad/amouddoumad.github.io/actions/workflows/update-data.yml/dispatches`
-- **Method:** POST · **Schedule:** custom cron `*/5 * * * *` (every 5 min)
+- **Method:** POST · **Schedule:** custom cron, owner's cadence call of 2026-10-05
+  (GitHub queues could not absorb 12 runs/h): **`0 1,16,31,46 * * *`** — four slots
+  an hour at :01/:16/:31/:46, matching the workflow's `schedule:` backstop. The job
+  as last touched still says `*/5 * * * *`; the edit lives with the owner (no
+  automation login for cron-job.org exists — account field above is still empty).
 - **Request body:** `{"ref":"main"}`
 - **HTTP headers:** `Authorization: Bearer <fine-grained PAT>` ·
   `Content-Type: application/json` · `Accept: application/vnd.github+json`
@@ -474,39 +478,46 @@ then paste the PAT into the env file and check with
 (it fetches Spanish servers from wherever it sits). If the box is ever unreachable, the
 site simply degrades to GitHub-Actions-only, as before.
 
-**Third runner on Silly Development = the primary 5-min writer (2026-10-04)** — a
-free ad-funded Pterodactyl host, sillydev.co.uk (owner's panel account
-`nacirbl@gmail.com`, server **mad-backup**, id `7fe090e1`; free tier: 25% CPU,
-256 MiB RAM, 512 MiB disk, 24/7, no sleeps, no renewals). Supervisor
-`tools/backup/sillydev-main.py` loops every 300 s, sha-gated tarball self-sync into
-`run/`, then runs `run_backup.py`. Config lives in
-`/home/container/tools/backup/mad-backup.env` (created and edited through the panel
-Files editor — the panel's standard client API is stripped on this fork): classic PAT
-from the `Nacirbl` session (see Config note above) plus **`STALE_MIN=0` and
-`BACKUP_STALE=0`**, i.e. scrape-and-push on every tick, chosen by the owner on
-2026-10-04 when he retired dmb5. His decision explicitly accepts the AUP tension: the
-host bans *"requesting a site far more often than a person would"*, so this server
-may one day simply vanish — if it does, nothing breaks beyond losing a writer (GitHub
-cron + the §9 pinger still refresh the site; losing the free account is the max
-damage). First armed push verified same day: `data: backup refresh (independent
-runner)` at 12:48:27Z, `meta.src=backup` / `pushed_by=backup-runner` (~6 s thanks to
-the same-day caches the gate seeds). Deployment is the panel's **GitHub tab → Public
+**Third runner on Silly Development = per-slot insurance (2026-10-04, re-tuned
+2026-10-05)** — a free ad-funded Pterodactyl host, sillydev.co.uk (owner's panel
+account `nacirbl@gmail.com`, server **mad-backup**, id `7fe090e1`; free tier: 25%
+CPU, 256 MiB RAM, 512 MiB disk, 24/7, no sleeps, no renewals). It went live 2026-10-04
+as a blind 5-min writer (first push 12:48:27Z, twelve/hour, `STALE_MIN=0`) — until
+2026-10-05, when the owner ruled GitHub can't absorb twelve runs an hour and set the
+house cadence to four slots (:01/:16/:31/:46). Supervisor `tools/backup/sillydev-main.py`
+therefore now polls the clock every 20 s and **fires at :05/:20/:35/:50** (four
+minutes into each slot), sha-gated tarball self-sync into `run/`, then runs
+`run_backup.py` with `STALE_MIN=8`/`BACKUP_STALE=8`: on a healthy hour the data is
+3–5 min old at that check and it stands down (`backup tick: skipped-fresh`, zero
+Renfe/airport traffic); it scrapes and pushes only when a GitHub slot was missed or
+ran >8 min late. Config lives in `/home/container/tools/backup/mad-backup.env`
+(created and edited through the panel Files editor — the panel's standard client API
+is stripped on this fork): classic PAT from the `Nacirbl` session (see Config note
+above) plus the thresholds above. AUP tension (host bans *"requesting a site far
+more often than a person would"*) is now much thinner — four scrapes/hour worst
+case — but the free server may still one day vanish; if it does, nothing breaks
+beyond losing the insurance. Supervisor code changes deploy via **GitHub tab →
+Deploy now** *and need the panel Restart button too* — the long-running process is
+not auto-restarted despite the toggle (verified 2026-10-05: boot line reads
+`supervisor up; slots [5, 20, 35, 50] min of hour`). Deployment is the panel's **GitHub tab → Public
 URL** (repo URL, branch `main`, folder `/`); "App py file" startup variable =
 `tools/backup/sillydev-main.py`. Free deploys are manual, rate-limited (one per
 450 s), and overwrite repo files in the checkout — the env file is NOT in the repo,
 so redeploys spare it. Gotchas: panel sessions expire, servers do not always
 autostart after a host restart, a *brand-new* unused server is deleted after 7 days
-(a running one is kept), and the commit log now shows one data commit per 5 min from
-this box. **dmb5 retirement is on the owner**: `crontab -l | grep -v 'run_backup.py'
+(a running one is kept). Expect the commit log to show `data: refresh arrivals`
+four times an hour from the pinger-driven workflow, with a `backup refresh` commit
+appearing in a slot only when GitHub missed it. **dmb5 retirement is on the owner**: `crontab -l | grep -v 'run_backup.py'
 | crontab -` over SSH (my key was deleted at his request), and `rm ~/.mad-backup.env`
 to drop the copy of his desktop OAuth token.
 
 ---
 
 ## 13. TL;DR for the impatient
-- Static site + GitHub cron (backstop) + cron-job.org pinger driving the real ~5-min
-  cadence (§9) + independent backup runner on dmb5, cron `0 * * * *`, and a token-
-  armed-when-given standby on sillydev, 5-min observer loop (§12). Edit
+- Static site + GitHub workflow pinged by cron-job.org at :01/:16/:31/:46 (§9, four
+  runs/hour since 2026-10-05) + sillydev slot-insurance firing :05/:20/:35/:50, push
+  only if GitHub's slot missed (>8 min) (§12) + dmb5 hourly runner pending the
+  owner's retirement command (§12). Edit
   `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
   `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
