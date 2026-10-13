@@ -452,9 +452,10 @@ locally: 522 flights + trains + Cercanías RT through the exact runner entry poi
   tokens can only scope the creating account's own repos (the repo picker cannot even
   find this one from the owner's personal account), whereas a **classic** PAT behaves
   like the session it came from — a classic token (`repo` scope) created from the
-  owner's `Nacirbl` session pushes fine here, which is what the sillydev runner uses
-  (created 2026-10-04 after a 2FA sudo prompt, no expiration, verified `push:true` via
-  the API). Current state on dmb5: the file holds an OAuth token copied from the
+  owner's `Nacirbl` session pushes fine here, which is what the sillydev runner used
+  until its 2026-10-13 retirement (created 2026-10-04 after a 2FA sudo prompt, no
+  expiration, verified `push:true` via the API; token deleted from the box then, see
+  §12). Current state on dmb5: the file holds an OAuth token copied from the
   owner's desktop Git credential store (push permission verified before reuse) —
   revoking his GitHub session or rotating his password kills the dmb5 runner, so the
   first maintenance task there is replacing it with a dedicated token. `run_backup.py
@@ -478,46 +479,59 @@ then paste the PAT into the env file and check with
 (it fetches Spanish servers from wherever it sits). If the box is ever unreachable, the
 site simply degrades to GitHub-Actions-only, as before.
 
-**Third runner on Silly Development = per-slot insurance (2026-10-04, re-tuned
-2026-10-05)** — a free ad-funded Pterodactyl host, sillydev.co.uk (owner's panel
-account `nacirbl@gmail.com`, server **mad-backup**, id `7fe090e1`; free tier: 25%
-CPU, 256 MiB RAM, 512 MiB disk, 24/7, no sleeps, no renewals). It went live 2026-10-04
-as a blind 5-min writer (first push 12:48:27Z, twelve/hour, `STALE_MIN=0`) — until
-2026-10-05, when the owner ruled GitHub can't absorb twelve runs an hour and set the
-house cadence to four slots (:01/:16/:31/:46). Supervisor `tools/backup/sillydev-main.py`
-therefore now polls the clock every 20 s and **fires at :05/:20/:35/:50** (four
-minutes into each slot), sha-gated tarball self-sync into `run/`, then runs
-`run_backup.py` with `STALE_MIN=8`/`BACKUP_STALE=8`: on a healthy hour the data is
-3–5 min old at that check and it stands down (`backup tick: skipped-fresh`, zero
-Renfe/airport traffic); it scrapes and pushes only when a GitHub slot was missed or
-ran >8 min late. Config lives in `/home/container/tools/backup/mad-backup.env`
-(created and edited through the panel Files editor — the panel's standard client API
-is stripped on this fork): classic PAT from the `Nacirbl` session (see Config note
-above) plus the thresholds above. AUP tension (host bans *"requesting a site far
-more often than a person would"*) is now much thinner — four scrapes/hour worst
-case — but the free server may still one day vanish; if it does, nothing breaks
-beyond losing the insurance. Supervisor code changes deploy via **GitHub tab →
-Deploy now** *and need the panel Restart button too* — the long-running process is
-not auto-restarted despite the toggle (verified 2026-10-05: boot line reads
-`supervisor up; slots [5, 20, 35, 50] min of hour`). Deployment is the panel's **GitHub tab → Public
-URL** (repo URL, branch `main`, folder `/`); "App py file" startup variable =
-`tools/backup/sillydev-main.py`. Free deploys are manual, rate-limited (one per
-450 s), and overwrite repo files in the checkout — the env file is NOT in the repo,
-so redeploys spare it. Gotchas: panel sessions expire, servers do not always
-autostart after a host restart, a *brand-new* unused server is deleted after 7 days
-(a running one is kept). Expect the commit log to show `data: refresh arrivals`
-four times an hour from the pinger-driven workflow, with a `backup refresh` commit
-appearing in a slot only when GitHub missed it. **dmb5 retirement is on the owner**: `crontab -l | grep -v 'run_backup.py'
-| crontab -` over SSH (my key was deleted at his request), and `rm ~/.mad-backup.env`
-to drop the copy of his desktop OAuth token.
+**Third runner on Silly Development — RETIRED 2026-10-13** — sillydev.co.uk is a
+free ad-funded Pterodactyl host (owner's panel account `nacirbl@gmail.com`, server
+**mad-backup**, id `7fe090e1`; free tier: 25% CPU, 256 MiB RAM, 512 MiB disk).
+Supervisor `tools/backup/sillydev-main.py` booted via the "App py file" startup
+variable, fired `run_backup.py` at :05/:20/:35/:50 (slot insurance against the
+GitHub cadence), sha-gated tarball self-sync into `run/`. It ran as designed from
+2026-10-04 and both gate branches were live-verified in its first hours. The
+retirement cause is at the source, not in the code: **Aena's arrivals page returns
+HTTP 403 Forbidden to this host's address (87.106.100.187, a UK datacenter range),
+all eight time bands** — while the same fetch answers in 0.3 s from a home line,
+from dmb5's university network, and from GitHub runners. Because `scrape.py` keeps
+the previous flights and the old `meta.updated` when the airport scrapes back empty,
+this host then pushed a *frozen* flight board every slot (only the Cercanías live
+delays still changed, which is what made each commit non-empty): 2026-10-13 the site
+read "datos de hace 2h" behind ~96 friendly-looking `data: backup refresh` commits,
+the board having advanced only at the two schedule runs GitHub managed (07:06Z,
+15:02Z). A hosting IP cannot be changed, and hiding it (proxy/VPN/relay) is out:
+free proxies are what such filters block first, paid ones cost money, routing the
+fetch through strangers also cuts against the host's own AUP, and a 403 is an
+explicit refusal we do not route around. So as a flight-board backup this host
+fails the requirement, and it went out the same evening: `GITHUB_TOKEN` in
+`/home/container/tools/backup/mad-backup.env` replaced by a `PASTE-` placeholder
+(panel Files editor; the CodeMirror editor lives in the page DOM, edit via
+execCommand select-all/insertText; write confirmed through the panel Activity log
+`server:file.write`), then panel **Stop**. The token removal is the real lock, not
+the Stop: this host appears to *wake containers on console page visits* (a Stop was
+already silently undone once — badge back to Running with no power event in Activity).
+With the placeholder the runner stands down as `no-token` before even scraping, so a
+wake does nothing. To bring it back (pointless while Aena 403s its IP): put a real
+classic PAT back in the env file and press Start; deploy path remains GitHub tab →
+Public URL (branch `main`, folder `/`), env file not in the repo so redeploys spare
+it, and supervisor code changes need GitHub deploy *plus* panel Restart. The
+retired classic PAT (created 2026-10-04 from the owner's `Nacirbl` session after a
+2FA sudo prompt, `repo` scope, no expiration) is not used by anything else — it can
+be deleted on GitHub, or kept; the dmb5 runner does not share it.
+**The backup writer going forward is dmb5** (§12 install above — its Aena fetches
+work; AUP-clean human-scale traffic too). Its crontab line was never removed on the
+owner's side; the "retirement command" (`crontab -l | grep -v 'run_backup.py' |
+crontab -`) is therefore **cancelled — keep dmb5 installed**. Today (2026-10-13) it
+committed nothing, consistent with it standing down quietly while sillydev's
+15-min pushes kept the data under its 35-min gate — the owner should confirm with
+`crontab -l` that the line is still there, and `python3 tools/backup/run_backup.py
+--dry` over SSH shows the gate's decision. With the pinger at four slots an hour,
+dmb5 only writes when GitHub's last slot is >35 min old.
 
 ---
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub workflow pinged by cron-job.org at :01/:16/:31/:46 (§9, four
-  runs/hour since 2026-10-05) + sillydev slot-insurance firing :05/:20/:35/:50, push
-  only if GitHub's slot missed (>8 min) (§12) + dmb5 hourly runner pending the
-  owner's retirement command (§12). Edit
+  runs/hour since 2026-10-05; owner still to set the pinger's own schedule) + dmb5
+  hourly backup at :00, push only if data >35 min (§12; retirement command
+  cancelled — keep it) + sillydev retired 2026-10-13: Aena 403s its host IP, so its
+  board can never advance there; token removed, server stopped (§12). Edit
   `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
   `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
