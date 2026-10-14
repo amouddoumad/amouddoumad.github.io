@@ -5,7 +5,11 @@ writes data.json — the single file the static front end fetches.
 Data sources:
 
 1. Airport (Madrid Barajas) — aeropuertomadrid-barajas.com. Live board, whole day
-   via 3-hour time bands. Replaced every run.
+   via 3-hour time bands. Replaced every run. If that page comes back EMPTY (Aena
+   answers 403 to some hosts — see tools/aena_probe.py, 2026-10-13), the fallback
+   is Aena's own JSON endpoint on www.aena.es, which served 200 from the same
+   blocked IP. It carries the whole day (and both neighbours) in one call; city
+   names are Spanish there. meta.flight_status records which source was used.
 
 2. Train stations, long-distance (Madrid-Puerta de Atocha stop 60000 and
    Madrid-Chamartín stop 17000) — Renfe's official AV/LD GTFS timetable
@@ -44,6 +48,16 @@ import zipfile
 AIRPORT_URL = "https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm"
 TIME_BANDS = ["0-3", "3-6", "6-9", "9-12", "12-15", "15-18", "18-21", "21-0"]
 TERMINALS = ["T1", "T2", "T3", "T4"]  # T4S merged into T4
+# Aena's own JSON board (public, keyless). Different host from the HTML page, so
+# it keeps answering when the HTML site 403s a host (aena_probe.py evidence,
+# 2026-10-13). dosDias=si returns today + tomorrow; tipoVuelo L = arrivals.
+AENA_JSON_URL = ("https://www.aena.es/sites/Satellite"
+                 "?pagename=AENA_ConsultarVuelos&airport=MAD&flightType=L&dosDias=si")
+try:  # stdlib since 3.9; the fixed offset is a last-resort fallback only
+    from zoneinfo import ZoneInfo
+    _MAD_TZ = ZoneInfo("Europe/Madrid")
+except Exception:  # noqa: BLE001 - Windows without the tzdata package
+    _MAD_TZ = datetime.timezone(datetime.timedelta(hours=1))
 
 # ---- trains (Renfe AV/LD GTFS) ----
 GTFS_URL = "https://ssl.renfe.com/gtransit/Fichero_AV_LD/google_transit.zip"
@@ -144,6 +158,47 @@ def scrape_airport():
             city, code = _split_origin(m.group(2))
             flights.append({"hour": hour, "terminal": term, "city": city, "code": code})
     flights.sort(key=lambda f: (f["hour"], f["terminal"], f["city"]))
+    return flights, clock
+
+
+def scrape_airport_json():
+    """Fallback airport board: Aena's public JSON endpoint (scrape_airport's
+    (flights, clock) shape, city names in Spanish). Used when the HTML page
+    returns empty — same data, different host, so one blocked host does not
+    take the board down."""
+    try:
+        rows = json.loads(_fetch_bytes(AENA_JSON_URL).decode("utf-8", "replace"))
+    except Exception as e:  # noqa: BLE001
+        print(f"  airport JSON fallback: FAILED ({e})", file=sys.stderr)
+        return [], None
+    if not isinstance(rows, list):
+        return [], None
+    now = datetime.datetime.now(_MAD_TZ)
+    key = now.strftime("%d/%m/%Y")  # the `fecha` format in the rows
+    seen, flights = set(), []
+    for r in rows:
+        if not isinstance(r, dict) or r.get("tipoVuelo") != "L" or r.get("fecha") != key:
+            continue
+        if str(r.get("estado") or "").upper() in ("CANC", "CANCELLED"):
+            continue
+        term = _norm_terminal(r.get("terminal"))
+        if term is None:
+            continue
+        hp = str(r.get("horaProgramada") or "")
+        if not re.match(r"^\d{2}:", hp):
+            continue
+        city = str(r.get("ciudadIataOtro") or "").strip()
+        code = str(r.get("iataOtro") or "").strip()
+        if not city:
+            continue
+        k = (int(hp[:2]), term, city)
+        if k in seen:
+            continue
+        seen.add(k)
+        flights.append({"hour": int(hp[:2]), "terminal": term,
+                        "city": city.title(), "code": code})
+    flights.sort(key=lambda f: (f["hour"], f["terminal"], f["city"]))
+    clock = (now.hour, now.strftime("%d %b, %H:%M"), now.strftime("%Y-%m-%d"))
     return flights, clock
 
 
@@ -337,11 +392,16 @@ def main():
     prev_meta = prev.get("meta", {})
 
     flights, clock = scrape_airport()
+    flight_note = "html" if flights else None
+    if not flights:  # e.g. the HTML host 403s us (2026-10-13) — try Aena's JSON
+        flights, clock = scrape_airport_json()
+        flight_note = "json" if flights else None
     today = clock[2] if clock else prev_meta.get("day")
 
     if not flights and prev.get("flights"):
         print("Empty airport scrape — keeping previous flights.", file=sys.stderr)
         flights = prev["flights"]
+        flight_note = "kept-previous"
 
     # Trains: the schedule doesn't change during the day, so compute once per day
     # and reuse the cached result on later runs. Same policy for Cercanías below.
@@ -397,6 +457,7 @@ def main():
         "cer_rt_ch": cer_rt_ch,
         "meta": {
             "flight_count": len(flights),
+            "flight_status": flight_note or "empty",
             "train_count": len(trains),
             "train_ch_count": len(trains_ch),
             "cer_count": len(cercanias),

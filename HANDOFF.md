@@ -271,6 +271,12 @@ The job (cron-job.org free plan; account: ____________________ — fill in after
   an hour at :01/:16/:31/:46, matching the workflow's `schedule:` backstop. The job
   as last touched still says `*/5 * * * *`; the edit lives with the owner (no
   automation login for cron-job.org exists — account field above is still empty).
+  **2026-10-14 check: no `workflow_dispatch` run in the Actions list at all** — the
+  job is paused/deleted or its PAT is dead, so today the backstop cron carried the
+  board alone and data sat ~4.5 h old mid-morning (only the 03:15Z schedule run
+  landed). The owner-side fix is the same: set the job to `0 1,16,31,46 * * *` and
+  confirm its last-execution log, and check the dmb5 crontab while there (no
+  `backup refresh` commit either — see §12).
 - **Request body:** `{"ref":"main"}`
 - **HTTP headers:** `Authorization: Bearer <fine-grained PAT>` ·
   `Content-Type: application/json` · `Accept: application/vnd.github+json`
@@ -514,6 +520,30 @@ it, and supervisor code changes need GitHub deploy *plus* panel Restart. The
 retired classic PAT (created 2026-10-04 from the owner's `Nacirbl` session after a
 2FA sudo prompt, `repo` scope, no expiration) is not used by anything else — it can
 be deleted on GitHub, or kept; the dmb5 runner does not share it.
+**Aena's JSON endpoint works from the blocked IP (probe 2026-10-14)** — the 403
+covers `aeropuertomadrid-barajas.com` only. `tools/aena_probe.py` ran inside the
+sillydev container itself: control (the HTML page) `FAIL HTTPError 403`, subject
+(Aena's own public board `www.aena.es/sites/Satellite?pagename=AENA_ConsultarVuelos
+&airport=MAD&flightType=L&dosDias=si`, no auth) `OK 200`, 4.35 MB, ~4 100 rows.
+`scrape.py` now fetches that JSON as a **fallback whenever the HTML board comes back
+empty** (`scrape_airport_json()`, `meta.flight_status` = `html` / `json` /
+`kept-previous` / `empty`; city names arrive Spanish-cased there, e.g. "Edimburgo",
+and rows carry `fecha`+`horaProgramada` so today is filtered with zoneinfo
+Europe/Madrid). This is not evasion: a different, explicitly public Aena endpoint,
+no proxy, no IP hiding, human-scale traffic. It also means a future block of the
+HTML host can never freeze the board silently — worst case the data switches source
+and `flight_status` shows it. With this, sillydev *could* be brought back as a
+runner (its blocker no longer applies), but it stays retired: the token is deleted
+and GitHub+dmb5 cover the slots. Panel gotchas learned the hard way while probing:
+the console command box **and Schedules tasks do not run anything on this host** —
+commands go to the running app's stdin, which the supervisor never reads (a test
+task looked created and "fired" every minute, yet created no files); to run a
+one-off inside the container, overwrite the startup file itself through the Files
+editor and press Restart (then GitHub-tab Deploy now restores it), which is how the
+probe ran; also this fork's editor can fail to persist an edit despite logging
+`server:file.write` and bumping the mtime (the 130 B `aena_test.txt` result file on
+that host never took the cleanup text — harmless), and its Stop can be undone by
+waking console visits, so token removal remains the real lock.
 **The backup writer going forward is dmb5** (§12 install above — its Aena fetches
 work; AUP-clean human-scale traffic too). Its crontab line was never removed on the
 owner's side; the "retirement command" (`crontab -l | grep -v 'run_backup.py' |
@@ -530,8 +560,11 @@ dmb5 only writes when GitHub's last slot is >35 min old.
 - Static site + GitHub workflow pinged by cron-job.org at :01/:16/:31/:46 (§9, four
   runs/hour since 2026-10-05; owner still to set the pinger's own schedule) + dmb5
   hourly backup at :00, push only if data >35 min (§12; retirement command
-  cancelled — keep it) + sillydev retired 2026-10-13: Aena 403s its host IP, so its
-  board can never advance there; token removed, server stopped (§12). Edit
+  cancelled — keep it) + sillydev retired 2026-10-13: the HTML arrivals host 403s its
+  IP; token removed, server stopped (§12). `scrape.py` now falls back to Aena's own
+  public JSON board whenever the HTML page returns empty, so one blocked host can no
+  longer freeze the board or push stale data silently (`meta.flight_status` shows the
+  source). Edit
   `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
   `data.json`. Verify at ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
