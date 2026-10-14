@@ -544,29 +544,38 @@ probe ran; also this fork's editor can fail to persist an edit despite logging
 `server:file.write` and bumping the mtime (the 130 B `aena_test.txt` result file on
 that host never took the cleanup text — harmless), and its Stop can be undone by
 waking console visits, so token removal remains the real lock.
-**The backup writer going forward is dmb5** (§12 install above — its Aena fetches
-work; AUP-clean human-scale traffic too). Its crontab line was never removed on the
-owner's side; the "retirement command" (`crontab -l | grep -v 'run_backup.py' |
-crontab -`) is therefore **cancelled — keep dmb5 installed**. Today (2026-10-13) it
-committed nothing, consistent with it standing down quietly while sillydev's
-15-min pushes kept the data under its 35-min gate — the owner should confirm with
-`crontab -l` that the line is still there, and `python3 tools/backup/run_backup.py
---dry` over SSH shows the gate's decision. With the pinger at four slots an hour,
-dmb5 only writes when GitHub's last slot is >35 min old.
+**dmb5 is OUT (owner's call 2026-10-14)** — the box produced no `data: backup
+refresh` commit through 2026-10-13/14, including the hours when the board sat 4.5 h
+old (03:15Z→07:50Z on 2026-10-14), far past its 35-min gate — consistent with its
+crontab line or the host itself being gone; never inspected further (my SSH key was
+deleted at the owner's request) and now ruled out of the design by the owner.
+Nothing to clean up there beyond: `crontab -l | grep -v 'run_backup.py' | crontab -`
+(only if the line was ever installed), `rm ~/.mad-backup.env` (drops the copy of the
+owner's desktop OAuth token), `rm -rf ~/mad-arrivals` optional. Consequence stated
+plainly: **there is now no independent runner anywhere** — sillydev retired, dmb5
+out — so freshness rests on the GitHub workflow *and nothing else*; the pinger (§9)
+is the whole guarantee and must be treated as critical (GitHub's own `schedule:`
+proved twice this year to skip hours). The install recipe above stays in this file
+for whatever host replaces dmb5 (any Linux box with cron + outbound HTTPS; note the
+JSON fallback now means even a host the HTML site 403s can run the pipeline).
+Sillydev, for the record, *could* rejoin as a runner now (the blocker only covered
+the HTML host — see the probe paragraph): it would need a fresh classic PAT pasted
+back into its env file and a panel Start; the owner has not asked for this.
 
 ---
 
 ## 13. TL;DR for the impatient
-- Static site + GitHub workflow pinged by cron-job.org at :01/:16/:31/:46 (§9, four
-  runs/hour since 2026-10-05; owner still to set the pinger's own schedule) + dmb5
-  hourly backup at :00, push only if data >35 min (§12; retirement command
-  cancelled — keep it) + sillydev retired 2026-10-13: the HTML arrivals host 403s its
-  IP; token removed, server stopped (§12). `scrape.py` now falls back to Aena's own
-  public JSON board whenever the HTML page returns empty, so one blocked host can no
-  longer freeze the board or push stale data silently (`meta.flight_status` shows the
-  source). Edit
-  `index.html`/`scrape.py` locally → `git pull --rebase` → `git push`. Never touch
-  `data.json`. Verify at ≥500px and via the live `data.json`.
+- Static site + GitHub workflow as the ONLY writer: its `schedule:` backstop fires
+  unreliably, so the cron-job.org pinger (§9) is what keeps the cadence — and on
+  2026-10-14 the pinger was found to have fired ZERO dispatch runs (paused job or
+  dead PAT: **owner must revive it** and set `0 1,16,31,46 * * *`). Both independent
+  runners are gone: dmb5 OUT 2026-10-14, sillydev retired 2026-10-13 (token removed,
+  server stopped; it could rejoin via the JSON fallback if ever wanted). `scrape.py`
+  now falls back to Aena's own public JSON board whenever the HTML page returns
+  empty, so one blocked host can no longer freeze the board or push stale data
+  silently (`meta.flight_status` shows the source). Edit `index.html`/`scrape.py`
+  locally → `git pull --rebase` → `git push`. Never touch `data.json`. Verify at
+  ≥500px and via the live `data.json`.
 - Airport = live board (full day). Atocha + Chamartín LD = Renfe AV/LD GTFS schedule
   (stops 60000 / 17000; no real-time exists for LD — live boards are blocked from CI).
   Cercanías = national Cercanías GTFS schedule (stops 18000 / 17000, cached daily) +
