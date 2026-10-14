@@ -53,7 +53,7 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
 | `index.html` | The entire app: HTML + CSS + vanilla JS. Fetches `data.json`, renders. No build step, no framework, no external assets. |
 | `scrape.py` | Standard-library-only scraper. Writes `data.json`. Runs in CI. |
 | `data.json` | Scraped data. **Owned by the cron — do not hand-edit or hand-commit** (see §6). |
-| `.github/workflows/update-data.yml` | Cron (`*/10`), `workflow_dispatch`, and push-on-`scrape.py`. Commits `data.json`. |
+| `.github/workflows/update-data.yml` | Cron (at :01/:31, backstop), `workflow_dispatch` (the pinger, §9), and push-on-`scrape.py`. Commits `data.json`. |
 | `README.md` | User-facing setup/hosting notes. |
 | `HANDOFF.md` | This file. |
 
@@ -256,28 +256,37 @@ real-time maps are NOT cached — they refresh on every run.)
 
 ---
 
-## 9. Reliable freshness — the cron-job.org pinger (designed 2026-09-28, NEVER CREATED — see the 2026-10-14 note)
+## 9. Reliable freshness — the cron-job.org pinger (designed 2026-09-28, CREATED 2026-10-14 — job 8646758)
 
-**2026-10-14, the day's hard lesson: this whole section was still a plan.** The
-owner never made the cron-job.org account (the empty account field below was the
-tell), so no pinger has ever fired — the zero `workflow_dispatch` runs on 2026-10-14
-are not a regression, they are the true baseline since day one. Everything written
-below describes the exact job to create; the first real run of it is what will set
-`meta.updated` moving on a true 15-min cadence. Until then the ONLY writers are the
-workflow's `schedule:` backstop (under-fires: 2–5 h gaps) — both independent runners
-are retired (§12), so the site's freshness is entirely luck until this gets built.
+**Built.** The owner made the cron-job.org account on 2026-10-14 and the job below
+(id **8646758**, title "mad-arrivals dispatch") was created the same day through the
+console UI; the saved record was read back server-side and matches this spec. Until
+the owner pastes a real PAT into the job's Authorization header (currently the
+placeholder `Bearer REPLACE_WITH_PAT`) it will bounce 401s — harmless, and
+cron-job.org emails the account about sustained failure. The earlier reality, worth
+keeping on record: the account had *never* existed before 2026-10-14, so zero
+`workflow_dispatch` runs was the true baseline since day one, not a regression.
+While the pinger was fictional the ONLY writer was the workflow's `schedule:`
+backstop (under-fires: 2–5 h gaps) and both independent runners were retired (§12):
+the site's freshness was entirely luck.
 
-GitHub's scheduler under-fires this repo badly (see §8): it creates a `schedule` event
-every 2–5 h instead of every 10 min. A `workflow_dispatch` run, by contrast, starts
-immediately (measured queue delay 0 min). So cadence is driven by an **external pinger
-POSTing the dispatch endpoint**, with the `*/10` cron kept as a backstop.
+GitHub's scheduler under-fires this repo badly (see §8): it created a `schedule` event
+every 2–5 h instead of on the cron. A `workflow_dispatch` run, by contrast, starts
+immediately (measured queue delay 0 min). So cadence is driven by the **external pinger
+POSTing the dispatch endpoint**, with the workflow's `schedule:` cron kept as a backstop.
 
-The job (cron-job.org free plan; account: ____________________ — fill in after signup):
+The job (cron-job.org free plan; account: owner's Gmail login, created 2026-10-14;
+console at console.cron-job.org, job id 8646758):
 
 - **URL:** `https://api.github.com/repos/amouddoumad/amouddoumad.github.io/actions/workflows/update-data.yml/dispatches`
-- **Method:** POST · **Schedule:** custom cron, owner's cadence call of 2026-10-05
-  (GitHub queues could not absorb 12 runs/h): **`0 1,16,31,46 * * *`** — four slots
-  an hour at :01/:16/:31/:46, matching the workflow's `schedule:` backstop.
+- **Method:** POST · **Schedule:** custom crontab **`1,31 * * * *`** — two slots an
+  hour at :01/:31 (owner's cadence call of 2026-10-14, down from the earlier
+  four-slot design), matching the workflow's `schedule:` backstop.
+  **Gotcha:** cron-job.org's crontab field is standard **5-field** cron
+  (min hour dom mon wday). The old spec written here, `0 1,16,31,46 * * *`, was
+  invalid — minute pinned to 0, "hour 31" — and the console only says
+  "Crontab expression" next to the field, so the form silently refused creation
+  for months over a string nobody could run anyway.
 - **Request body:** `{"ref":"main"}`
 - **HTTP headers:** `Authorization: Bearer <fine-grained PAT>` ·
   `Content-Type: application/json` · `Accept: application/vnd.github+json`
@@ -309,12 +318,14 @@ response codes. Cadence check — measures real refresh-commit gaps:
 
 ```bash
 git fetch -q origin main && git log origin/main --format="%ct %s" -200 \
-  | python -c "import sys,statistics;ts=[int(l.split()[0]) for l in sys.stdin if 'data: refresh' in l];g=[(a-b)/60 for a,b in zip(ts,ts[1:])];print('runs:',len(g),'median %.0f min  max %.0f min  >15min: %d'%(statistics.median(g),max(g),sum(1 for x in g if x>15)))"
+  | python -c "import sys,statistics;ts=[int(l.split()[0]) for l in sys.stdin if 'data: refresh' in l];g=[(a-b)/60 for a,b in zip(ts,ts[1:])];print('runs:',len(g),'median %.0f min  max %.0f min  >35min: %d'%(statistics.median(g),max(g),sum(1 for x in g if x>35)))"
 ```
 
-**Healthy = median ≤ 15 min.** If it drifts back up: check the job is still active
-(cron-job.org pauses jobs on account inactivity / bouncing email) and that the PAT
-hasn't expired.
+**Healthy = median ≤ 30 min** (nominal gap at two runs/hour is 30). If it drifts
+back up: check the job is still active (cron-job.org pauses jobs on account
+inactivity / bouncing email, and pauses after repeated failures — e.g. while the
+Authorization header still holds the PAT placeholder) and that the PAT hasn't
+expired.
 
 The UI is honest about the residual gaps too: when `meta.updated` is older than 30 min
 the header adds "datos de hace X" (amber), red from 2 h — a driver never reads stale
@@ -567,11 +578,13 @@ back into its env file and a panel Start; the owner has not asked for this.
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub workflow as the ONLY writer: its `schedule:` backstop fires
-  unreliably (2–5 h gaps), so the cron-job.org pinger (§9) is what WOULD keep the
-  cadence — but on 2026-10-14 the owner revealed the cron-job.org **account was
-  never created**: there is no pinger, never was. **Owner TODO: sign up free, create
-  the one job per §9 spec (`0 1,16,31,46 * * *`, POST, Bearer PAT), which is the
-  entire remaining work to make freshness reliable.** Both independent
+  unreliably (2–5 h gaps), so the cron-job.org pinger (§9) is what keeps the
+  cadence. The pinger is **built since 2026-10-14** (account + job 8646758, crontab
+  `1,31 * * * *` = two dispatches an hour at :01/:31, matching the workflow's
+  schedule). **Owner TODO, one paste:** create the fine-grained PAT per §9
+  (Actions: Read and write on this repo only), replace `Bearer REPLACE_WITH_PAT`
+  in the job's Authorization header, press TEST RUN and expect **204**. Until that
+  paste the pinger 401s and the backstop alone decides freshness. Both independent
   runners are gone: dmb5 OUT 2026-10-14, sillydev retired 2026-10-13 (token removed,
   server stopped; it could rejoin via the JSON fallback if ever wanted). `scrape.py`
   now falls back to Aena's own public JSON board whenever the HTML page returns

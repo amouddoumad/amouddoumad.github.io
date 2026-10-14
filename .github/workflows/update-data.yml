@@ -2,9 +2,11 @@ name: Update arrivals data
 
 on:
   schedule:
-    # 4× per hour at :01/:16/:31/:46 (owner's call 2026-10-04: GitHub queues could
-    # not absorb the pinger's 12 runs/h). Pinger (HANDOFF §9) pings the same slots.
-    - cron: "1,16,31,46 * * * *"
+    # 2× per hour at :01/:31 (owner's call 2026-10-14, down from 4×). The
+    # cron-job.org pinger (HANDOFF §9, job 8646758) dispatches the same slots;
+    # this schedule is only the backstop if the pinger dies — the concurrency
+    # group below serialises the rare double-fire. GitHub under-fires schedules.
+    - cron: "1,31 * * * *"
   workflow_dispatch: {}        # manual run from the Actions tab AND the cron-job.org pinger
                                # that guarantees the cadence (HANDOFF §9); the
                                # schedule: below is only a backstop — GitHub under-fires it
