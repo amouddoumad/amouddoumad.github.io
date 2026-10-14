@@ -256,7 +256,16 @@ real-time maps are NOT cached — they refresh on every run.)
 
 ---
 
-## 9. Reliable freshness — the cron-job.org pinger (added 2026-09-28)
+## 9. Reliable freshness — the cron-job.org pinger (designed 2026-09-28, NEVER CREATED — see the 2026-10-14 note)
+
+**2026-10-14, the day's hard lesson: this whole section was still a plan.** The
+owner never made the cron-job.org account (the empty account field below was the
+tell), so no pinger has ever fired — the zero `workflow_dispatch` runs on 2026-10-14
+are not a regression, they are the true baseline since day one. Everything written
+below describes the exact job to create; the first real run of it is what will set
+`meta.updated` moving on a true 15-min cadence. Until then the ONLY writers are the
+workflow's `schedule:` backstop (under-fires: 2–5 h gaps) — both independent runners
+are retired (§12), so the site's freshness is entirely luck until this gets built.
 
 GitHub's scheduler under-fires this repo badly (see §8): it creates a `schedule` event
 every 2–5 h instead of every 10 min. A `workflow_dispatch` run, by contrast, starts
@@ -268,15 +277,7 @@ The job (cron-job.org free plan; account: ____________________ — fill in after
 - **URL:** `https://api.github.com/repos/amouddoumad/amouddoumad.github.io/actions/workflows/update-data.yml/dispatches`
 - **Method:** POST · **Schedule:** custom cron, owner's cadence call of 2026-10-05
   (GitHub queues could not absorb 12 runs/h): **`0 1,16,31,46 * * *`** — four slots
-  an hour at :01/:16/:31/:46, matching the workflow's `schedule:` backstop. The job
-  as last touched still says `*/5 * * * *`; the edit lives with the owner (no
-  automation login for cron-job.org exists — account field above is still empty).
-  **2026-10-14 check: no `workflow_dispatch` run in the Actions list at all** — the
-  job is paused/deleted or its PAT is dead, so today the backstop cron carried the
-  board alone and data sat ~4.5 h old mid-morning (only the 03:15Z schedule run
-  landed). The owner-side fix is the same: set the job to `0 1,16,31,46 * * *` and
-  confirm its last-execution log, and check the dmb5 crontab while there (no
-  `backup refresh` commit either — see §12).
+  an hour at :01/:16/:31/:46, matching the workflow's `schedule:` backstop.
 - **Request body:** `{"ref":"main"}`
 - **HTTP headers:** `Authorization: Bearer <fine-grained PAT>` ·
   `Content-Type: application/json` · `Accept: application/vnd.github+json`
@@ -553,9 +554,9 @@ Nothing to clean up there beyond: `crontab -l | grep -v 'run_backup.py' | cronta
 (only if the line was ever installed), `rm ~/.mad-backup.env` (drops the copy of the
 owner's desktop OAuth token), `rm -rf ~/mad-arrivals` optional. Consequence stated
 plainly: **there is now no independent runner anywhere** — sillydev retired, dmb5
-out — so freshness rests on the GitHub workflow *and nothing else*; the pinger (§9)
-is the whole guarantee and must be treated as critical (GitHub's own `schedule:`
-proved twice this year to skip hours). The install recipe above stays in this file
+out — so freshness rests on the GitHub workflow *and nothing else* until the §9
+pinger (never created as of 2026-10-14: the account does not exist) is actually
+built; GitHub's own `schedule:` proved again this year to skip hours. The install recipe above stays in this file
 for whatever host replaces dmb5 (any Linux box with cron + outbound HTTPS; note the
 JSON fallback now means even a host the HTML site 403s can run the pipeline).
 Sillydev, for the record, *could* rejoin as a runner now (the blocker only covered
@@ -566,9 +567,11 @@ back into its env file and a panel Start; the owner has not asked for this.
 
 ## 13. TL;DR for the impatient
 - Static site + GitHub workflow as the ONLY writer: its `schedule:` backstop fires
-  unreliably, so the cron-job.org pinger (§9) is what keeps the cadence — and on
-  2026-10-14 the pinger was found to have fired ZERO dispatch runs (paused job or
-  dead PAT: **owner must revive it** and set `0 1,16,31,46 * * *`). Both independent
+  unreliably (2–5 h gaps), so the cron-job.org pinger (§9) is what WOULD keep the
+  cadence — but on 2026-10-14 the owner revealed the cron-job.org **account was
+  never created**: there is no pinger, never was. **Owner TODO: sign up free, create
+  the one job per §9 spec (`0 1,16,31,46 * * *`, POST, Bearer PAT), which is the
+  entire remaining work to make freshness reliable.** Both independent
   runners are gone: dmb5 OUT 2026-10-14, sillydev retired 2026-10-13 (token removed,
   server stopped; it could rejoin via the JSON fallback if ever wanted). `scrape.py`
   now falls back to Aena's own public JSON board whenever the HTML page returns
