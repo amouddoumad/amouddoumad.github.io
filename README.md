@@ -21,7 +21,7 @@ by visitors, only by the scheduled job (once per run, shared by everyone).
 
 ```
 GitHub Actions (cron)          GitHub Pages (free static host)      Phone
-  every ~10 min                                                     
+  every ~30 min                                                     
   python scrape.py  ──commit──►  index.html + data.json  ──fetch──►  renders
 ```
 
@@ -35,7 +35,7 @@ GitHub Actions (cron)          GitHub Pages (free static host)      Phone
 4. **Turn on Pages:** repo **Settings → Pages → Build and deployment → Source:
    “Deploy from a branch” → Branch: `main` / `/ (root)` → Save.**
 5. **Run the scraper once now:** repo **Actions → “Update arrivals data” → Run
-   workflow.** (After that it runs every ~10 minutes on its own.)
+   workflow.** (After that it runs every ~30 minutes on its own.)
 
 Your site is live at:
 
@@ -74,9 +74,11 @@ python -m http.server 8080
 
 ## Notes
 
-- **Freshness:** data is normally ≤15 min old — an external job (cron-job.org) POSTs
-  the `workflow_dispatch` API every 5 minutes, and the in-repo cron stays as a backstop.
-  If the data ever gets older than 30 min, the app's header says so ("datos de hace …").
+- **Freshness:** data is normally ≤30 min old — an external job (cron-job.org, job 8646758)
+  POSTs the `workflow_dispatch` API at :01 and :31, and the in-repo cron stays as a backstop.
+  The header shows the scrape time. (A "datos de hace …" staleness badge used to appear when
+  the data aged past 30 min; the owner had it removed 2026-10-21 — freshness is watched from
+  CI, not shown to drivers.)
 - **Analytics (optional):** once enabled by the owner, a visit counter on a Cloudflare
   Worker (our own code, see `tools/` and HANDOFF §10) reports visitors, countries,
   referrers and devices — no cookies, no stored IPs, country derived at Cloudflare's
@@ -87,7 +89,7 @@ python -m http.server 8080
   regardless of the viewer's timezone.
 - **Resilience:** if a scrape fails (source briefly down), `scrape.py` keeps the
   previous `data.json` instead of publishing zeros.
-- **Commit history:** the cron commits `data.json` every 10 min, so history is
+- **Commit history:** the cron commits `data.json` every ~30 min, so history is
   chatty. That's normal and harmless; squash/prune later if you like.
 - **Sources:**
   - Airport (live): https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm

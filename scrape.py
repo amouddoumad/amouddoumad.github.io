@@ -11,6 +11,13 @@ Data sources:
    blocked IP. It carries the whole day (and both neighbours) in one call; city
    names are Spanish there. meta.flight_status records which source was used.
 
+   TOMORROW comes from Aena's JSON endpoint on EVERY run (flights_next, meta.next_day)
+   — the HTML page only publishes a 6-hour tomorrow tail (bands "0-3+1", "3-6+1").
+   Its rows are one per flight NUMBER (codeshare variants), so we dedup on
+   (exact scheduled minute, terminal, city), which collapses codeshares and keeps
+   distinct flights (night check 2026-10-21: 17-23h window = 222 flights by minute
+   key, exactly the live HTML board's 222 rows; the old hour key merged ~5-15%).
+
 2. Train stations, long-distance (Madrid-Puerta de Atocha stop 60000 and
    Madrid-Chamartín stop 17000) — Renfe's official AV/LD GTFS timetable
    (ssl.renfe.com). We count SCHEDULED arrivals (trains TERMINATING at each
@@ -161,23 +168,32 @@ def scrape_airport():
     return flights, clock
 
 
-def scrape_airport_json():
-    """Fallback airport board: Aena's public JSON endpoint (scrape_airport's
-    (flights, clock) shape, city names in Spanish). Used when the HTML page
-    returns empty — same data, different host, so one blocked host does not
-    take the board down."""
+def scrape_airport_json(dates):
+    """Aena's public JSON board: physical arrivals for each date in `dates`
+    (YYYY-MM-DD). The HTML page (scrape_airport) gives one row per flight; this
+    feed has one row per flight NUMBER, so codeshare variants appear separately —
+    we dedup on (exact scheduled minute, terminal, city), which collapses a
+    codeshare (same schedule instant) while keeping distinct flights that merely
+    share an hour. Two uses: fetch tomorrow in full on EVERY run (the HTML page
+    only publishes a 6-h tomorrow tail), and serve as today's fallback when the
+    HTML host returns empty. City names are Spanish here. Returns
+    ({iso_date: [flights]}, clock)."""
     try:
         rows = json.loads(_fetch_bytes(AENA_JSON_URL).decode("utf-8", "replace"))
     except Exception as e:  # noqa: BLE001
-        print(f"  airport JSON fallback: FAILED ({e})", file=sys.stderr)
-        return [], None
+        print(f"  airport JSON: FAILED ({e})", file=sys.stderr)
+        return {}, None
     if not isinstance(rows, list):
-        return [], None
+        return {}, None
     now = datetime.datetime.now(_MAD_TZ)
-    key = now.strftime("%d/%m/%Y")  # the `fecha` format in the rows
-    seen, flights = set(), []
+    keys = {d: datetime.date.fromisoformat(d).strftime("%d/%m/%Y") for d in dates}  # `fecha` format
+    by_date = {d: [] for d in dates}
+    seen = {d: set() for d in dates}
     for r in rows:
-        if not isinstance(r, dict) or r.get("tipoVuelo") != "L" or r.get("fecha") != key:
+        if not isinstance(r, dict) or r.get("tipoVuelo") != "L":
+            continue
+        iso = next((i for i, k in keys.items() if r.get("fecha") == k), None)
+        if iso is None:
             continue
         if str(r.get("estado") or "").upper() in ("CANC", "CANCELLED"):
             continue
@@ -191,15 +207,16 @@ def scrape_airport_json():
         code = str(r.get("iataOtro") or "").strip()
         if not city:
             continue
-        k = (int(hp[:2]), term, city)
-        if k in seen:
+        k = (hp[:5], term, city)  # exact scheduled minute — codeshares share it
+        if k in seen[iso]:
             continue
-        seen.add(k)
-        flights.append({"hour": int(hp[:2]), "terminal": term,
-                        "city": city.title(), "code": code})
-    flights.sort(key=lambda f: (f["hour"], f["terminal"], f["city"]))
+        seen[iso].add(k)
+        by_date[iso].append({"hour": int(hp[:2]), "terminal": term,
+                             "city": city.title(), "code": code})
+    for lst in by_date.values():
+        lst.sort(key=lambda f: (f["hour"], f["terminal"], f["city"]))
     clock = (now.hour, now.strftime("%d %b, %H:%M"), now.strftime("%Y-%m-%d"))
-    return flights, clock
+    return by_date, clock
 
 
 # ---------------- train (GTFS) ----------------
@@ -229,13 +246,14 @@ def _active_services(z, date_str, weekday):
     return active
 
 
-def scrape_trains(today):
+def scrape_trains(day_iso):
     """Scheduled long-distance arrivals terminating at Atocha (60000) or Chamartín
-    (17000) for `today` (YYYY-MM-DD) — one parse serves both stations. Returns
+    (17000) for `day_iso` (YYYY-MM-DD) — one parse serves both stations. Called
+    for today AND tomorrow on cache-miss days. Returns
     ({stop_id: [trains]}, {stop_id: note})."""
     wanted = (ATOCHA_STOP, CHAM_STOP)
-    if not today:
-        today = datetime.date.today().isoformat()
+    if not day_iso:
+        day_iso = datetime.date.today().isoformat()
     try:
         raw = _fetch_bytes(GTFS_URL)
     except urllib.error.HTTPError as e:
@@ -244,7 +262,7 @@ def scrape_trains(today):
         return {s: [] for s in wanted}, {s: f"err_{type(e).__name__}" for s in wanted}
     try:
         z = zipfile.ZipFile(io.BytesIO(raw))
-        d = datetime.date.fromisoformat(today)
+        d = datetime.date.fromisoformat(day_iso)
         date_str, weekday = d.strftime("%Y%m%d"), d.weekday()
         active = _active_services(z, date_str, weekday)
 
@@ -391,39 +409,78 @@ def main():
             prev = {}
     prev_meta = prev.get("meta", {})
 
+    now_mad = datetime.datetime.now(_MAD_TZ)
+
+    def _valid_date(s):
+        try:
+            datetime.date.fromisoformat(s)
+            return s
+        except Exception:  # noqa: BLE001
+            return None
+
     flights, clock = scrape_airport()
     flight_note = "html" if flights else None
-    if not flights:  # e.g. the HTML host 403s us (2026-10-13) — try Aena's JSON
-        flights, clock = scrape_airport_json()
+    today = (_valid_date(clock[2] if clock else None) or _valid_date(prev_meta.get("day"))
+             or now_mad.strftime("%Y-%m-%d"))
+    tomorrow = (datetime.date.fromisoformat(today) + datetime.timedelta(days=1)).isoformat()
+
+    json_by = None
+    if not flights:  # e.g. the HTML host 403s us (2026-10-13) — Aena's JSON also serves today
+        json_by, jclock = scrape_airport_json([today, tomorrow])
+        flights = json_by.get(today, [])
         flight_note = "json" if flights else None
-    today = clock[2] if clock else prev_meta.get("day")
+        clock = clock or jclock
+    else:
+        json_by, _ = scrape_airport_json([tomorrow])  # tomorrow full-day (HTML gives only a 6-h tail)
+    flights_next = (json_by or {}).get(tomorrow, [])
+    flight_next_note = "json" if flights_next else None
 
     if not flights and prev.get("flights"):
         print("Empty airport scrape — keeping previous flights.", file=sys.stderr)
         flights = prev["flights"]
         flight_note = "kept-previous"
+    if not flights_next and prev.get("flights_next") and prev_meta.get("next_day") == tomorrow:
+        print("Empty tomorrow airport scrape — keeping previous flights_next.", file=sys.stderr)
+        flights_next = prev["flights_next"]
+        flight_next_note = "kept-previous"
 
-    # Trains: the schedule doesn't change during the day, so compute once per day
-    # and reuse the cached result on later runs. Same policy for Cercanías below.
-    # Both stations are parsed together, so the cache is used only when BOTH are
-    # cached-and-ok — a missing station (e.g. the first run after adding one)
-    # forces a fresh parse of both.
-    same_day = today is not None and prev_meta.get("day") == today
-    trains, trains_ch = [], []
-    train_note = train_ch_note = None
-    if (same_day and prev.get("trains") and prev.get("trains_ch")
-            and str(prev_meta.get("train_status", "")).startswith("ok")
-            and str(prev_meta.get("train_ch_status", "")).startswith("ok")):
+    # Trains: the schedule doesn't change during the day, so compute today AND
+    # tomorrow once per day and reuse the cached results on later runs. Same
+    # policy for Cercanías below (today only — fixed timetable, out of the
+    # ranking; the Mañana view skips the strip to keep data.json small).
+    # Both stations are parsed together, so the cache is used only when every
+    # list is cached-and-ok — a missing one (e.g. the first run after adding a
+    # station or the tomorrow day) forces a fresh parse.
+    same_day = prev_meta.get("day") == today
+    same_tom = prev_meta.get("next_day") == tomorrow
+    trains = trains_ch = trains_next = trains_ch_next = []
+    train_note = train_ch_note = train_next_note = train_ch_next_note = None
+    if (same_day and same_tom and prev.get("trains") and prev.get("trains_ch")
+            and prev.get("trains_next") and prev.get("trains_ch_next")
+            and all(str(prev_meta.get(k, "")).startswith("ok") for k in
+                    ("train_status", "train_ch_status", "train_next_status", "train_ch_next_status"))):
         trains, train_note = prev["trains"], prev_meta.get("train_status")
         trains_ch, train_ch_note = prev["trains_ch"], prev_meta.get("train_ch_status")
+        trains_next, train_next_note = prev["trains_next"], prev_meta.get("train_next_status")
+        trains_ch_next, train_ch_next_note = prev["trains_ch_next"], prev_meta.get("train_ch_next_status")
     else:
-        by_stop, notes = scrape_trains(today)
-        trains, train_note = by_stop[ATOCHA_STOP], notes[ATOCHA_STOP]
-        trains_ch, train_ch_note = by_stop[CHAM_STOP], notes[CHAM_STOP]
-        if not trains and same_day and prev.get("trains"):  # keep last good on a failed refresh
-            trains, train_note = prev["trains"], prev_meta.get("train_status")
-        if not trains_ch and same_day and prev.get("trains_ch"):
-            trains_ch, train_ch_note = prev["trains_ch"], prev_meta.get("train_ch_status")
+        for d, cache_ok in ((today, same_day), (tomorrow, same_tom)):
+            by_stop, notes = scrape_trains(d)
+            ato, ato_note = by_stop[ATOCHA_STOP], notes[ATOCHA_STOP]
+            cha, cha_note = by_stop[CHAM_STOP], notes[CHAM_STOP]
+            if d == today:  # keep last good per station on a failed refresh
+                if not ato and cache_ok and prev.get("trains"):
+                    ato, ato_note = prev["trains"], prev_meta.get("train_status")
+                if not cha and cache_ok and prev.get("trains_ch"):
+                    cha, cha_note = prev["trains_ch"], prev_meta.get("train_ch_status")
+                trains, train_note, trains_ch, train_ch_note = ato, ato_note, cha, cha_note
+            else:
+                if not ato and cache_ok and prev.get("trains_next"):
+                    ato, ato_note = prev["trains_next"], prev_meta.get("train_next_status")
+                if not cha and cache_ok and prev.get("trains_ch_next"):
+                    cha, cha_note = prev["trains_ch_next"], prev_meta.get("train_ch_next_status")
+                trains_next, train_next_note, trains_ch_next, train_ch_next_note = \
+                    ato, ato_note, cha, cha_note
 
     cercanias, cercanias_ch = [], []
     cer_note = cer_ch_note = None
@@ -449,8 +506,11 @@ def main():
     data = {
         "terminals": TERMINALS,
         "flights": flights,
+        "flights_next": flights_next,
         "trains": trains,
         "trains_ch": trains_ch,
+        "trains_next": trains_next,
+        "trains_ch_next": trains_ch_next,
         "cercanias": cercanias,
         "cercanias_ch": cercanias_ch,
         "cer_rt": cer_rt,
@@ -465,6 +525,13 @@ def main():
             "current_hour": clock[0] if clock else prev_meta.get("current_hour", -1),
             "updated": clock[1] if clock else prev_meta.get("updated", time.strftime("%d %b, %H:%M")),
             "day": today or "",
+            "next_day": tomorrow or "",
+            "flight_next_count": len(flights_next),
+            "flight_next_status": flight_next_note or "empty",
+            "train_next_count": len(trains_next),
+            "train_ch_next_count": len(trains_ch_next),
+            "train_next_status": train_next_note,
+            "train_ch_next_status": train_ch_next_note,
             "train_status": train_note,
             "train_ch_status": train_ch_note,
             "cer_status": cer_note,
@@ -479,9 +546,11 @@ def main():
 
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"Wrote {OUT_PATH}: {len(flights)} flights, {len(trains)}+{len(trains_ch)} trains "
-          f"({train_note}/{train_ch_note}), {len(cercanias)}+{len(cercanias_ch)} cercanías "
-          f"({cer_note}/{cer_ch_note}, rt {cer_rt_note}), day={today}")
+    print(f"Wrote {OUT_PATH}: {len(flights)} flights + {len(flights_next)} tomorrow "
+          f"({flight_note}/{flight_next_note}), {len(trains)}+{len(trains_ch)} trains "
+          f"({train_note}/{train_ch_note}), {len(trains_next)}+{len(trains_ch_next)} tomorrow "
+          f"({train_next_note}/{train_ch_next_note}), {len(cercanias)}+{len(cercanias_ch)} cercanías "
+          f"({cer_note}/{cer_ch_note}, rt {cer_rt_note}), day={today} next={tomorrow}")
 
 
 if __name__ == "__main__":

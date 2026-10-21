@@ -55,6 +55,14 @@
   .seg button{border:0; background:transparent; color:var(--muted); font-weight:750; font-size:12px;
     padding:7px 10px; border-radius:8px; cursor:pointer; min-width:58px}
   .seg button.on{background:var(--tot); color:var(--heroInk)}
+
+  /* ---------- day switch: Hoy / Mañana ---------- */
+  .daysel{display:none; gap:3px; margin:14px 2px 0; background:var(--card2); border:1px solid var(--line);
+    border-radius:13px; padding:3px; box-shadow:0 2px 8px var(--shadow)}
+  .daysel button{flex:1; border:0; background:transparent; color:var(--muted); font-weight:800;
+    font-size:13.5px; padding:10px 6px; border-radius:10px; cursor:pointer; letter-spacing:.2px}
+  .daysel button.on{background:var(--tot); color:var(--heroInk)}
+  .daysel button:active{transform:scale(.97)}
   .winner{display:flex; align-items:center; gap:16px; margin:12px 2px 16px}
   .wtile{flex:none; width:92px; height:92px; border-radius:24px; display:flex; flex-direction:column;
     align-items:center; justify-content:center; font-weight:900; color:var(--heroInk); line-height:1;
@@ -246,6 +254,11 @@
       <div class="cerline" id="heroCer" style="display:none"></div>
     </div>
 
+    <!-- DAY: hoy / mañana (mañana = full published schedule) -->
+    <div class="daysel" id="daySel">
+      <button id="dayToday" class="on"></button><button id="dayNext"></button>
+    </div>
+
     <!-- AIRPORT terminal totals -->
     <div class="shead"><span class="ic">🛬</span> Aeropuerto — por terminal
       <span class="tag">totales del día · toca para filtrar</span></div>
@@ -276,7 +289,8 @@
 
     <p class="foot">
       La <b>T4</b> incluye el satélite T4S. La hora actual se calcula en tu dispositivo (hora de Madrid).
-      Datos de trenes © Renfe (datos abiertos, CC-BY 4.0). Actualización automática cada ~10 min.<br>
+      Datos de trenes © Renfe (datos abiertos, CC-BY 4.0). Actualización automática cada ~30 min.<br>
+      La vista <b>Mañana</b> muestra la programación publicada (los horarios pueden cambiar durante el día).<br>
       Contamos visitas de forma anónima (país y dispositivo, sin IP).<br>
       <span id="counts"></span>
     </p>
@@ -296,8 +310,10 @@ function applyTheme(t){ root.dataset.theme=t; tbtn.textContent=t==='light'?'☀�
 applyTheme(localStorage.getItem('mad-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));
 tbtn.onclick=()=>{ const t=root.dataset.theme==='light'?'dark':'light'; localStorage.setItem('mad-theme',t); applyTheme(t); };
 
-/* data + state */
+/* data + state. RAWx and *x_N hold both days from data.json; FLIGHTS/TRAINS/TRAINS_CH
+   are the ACTIVE day's arrays (what every render function reads) — applyDay() swaps. */
 let FLIGHTS=[],TRAINS=[],TRAINS_CH=[],CER=[],CER_CH=[],CER_RT={},CER_RT_CH={},TERMS=[],ACT=[],META={},NOW_H=-1;
+let RAWF=[],RAWT=[],RAWTCH=[],FLIGHTS_N=[],TRAINSN=[],TRAINSC=[],NEXT_DAY='',DAY='today';
 let selected=new Set(),openHour=null,pastOpen=false,heroWhen='now',BOOTED=false;
 
 function madridHour(){
@@ -311,32 +327,30 @@ const trainsAt=h=>TRAINS.filter(t=>t.hour===h).length;
 const trainsChAt=h=>TRAINS_CH.filter(t=>t.hour===h).length;
 const hh=h=>String(h).padStart(2,'0')+':00';
 
-/* Data age: minutes between the scrape clock recorded in meta (meta.day + the HH:MM
-   of meta.updated, both Madrid wall-clock) and Madrid wall-clock now. */
-const MONNUM={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-function ageMinutes(){
-  try{
-    if(!META.day) return null;
-    const m=/^(\d{1,2})\s+([A-Za-z]{3}),\s*(\d{1,2}):(\d{2})/.exec(META.updated||'');
-    if(!m) return null;
-    const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
-    const g=t=>parseInt(p.find(x=>x.type===t).value,10);
-    const [Y,Mo,D]=META.day.split('-').map(Number);
-    const min=Math.round((Date.UTC(g('year'),g('month')-1,g('day'),g('hour')%24,g('minute'))
-                         - Date.UTC(Y,Mo-1,D,+m[3],+m[4]))/60000);
-    return min>0?min:0;
-  }catch(e){ return null; }
+const WDAY=['dom','lun','mar','mié','jue','vie','sáb'];
+function dayLabel(iso){ if(!iso) return '';
+  const p=String(iso).split('-').map(Number); if(p.length!==3||p.some(isNaN)) return '';
+  const d=new Date(p[0],p[1]-1,p[2]); return `${WDAY[d.getDay()]} ${d.getDate()}`; }
+
+/* Swap the active-day arrays and re-pick terminals that exist on this day. */
+function applyDay(){
+  if(DAY==='next'&&FLIGHTS_N.length){ FLIGHTS=FLIGHTS_N; TRAINS=TRAINSN; TRAINS_CH=TRAINSC; }
+  else{ FLIGHTS=RAWF; TRAINS=RAWT; TRAINS_CH=RAWTCH; }
+  const tot=dayTotals(); ACT=TERMS.filter(t=>tot[t]>0); if(!ACT.length)ACT=TERMS.slice();
+  selected=new Set([...selected].filter(t=>ACT.includes(t)));
+  if(!selected.size) selected=new Set(ACT);
 }
+function setDay(d){ if(DAY===d) return;
+  if(d==='next'&&!FLIGHTS_N.length) return;
+  DAY=d; applyDay(); openHour=null; pastOpen=false; renderAll(); }
+
+/* Header shows only the scrape clock. The old amber/red "datos de hace X" warning was
+   removed by owner request (2026-10-21) — it read as "broken" to drivers; freshness is
+   watched from CI (HANDOFF §9), not from the driver-facing page. */
 function updateAge(){
   const el=document.getElementById('updated');
   if(!el||!META.updated) return;
-  let html=`· ${esDate(META.updated)}`;
-  const a=ageMinutes();
-  if(a!==null&&a>30){
-    const txt=a<90?`${a} min`:a<1440?`${Math.round(a/60)} h`:`${Math.round(a/1440)} d`;
-    html+=` · <b style="color:${a>120?'var(--now)':'var(--t3)'}">datos de hace ${txt}</b>`;
-  }
-  el.innerHTML=html;
+  el.textContent=`· ${esDate(META.updated)}`;
 }
 
 /* Cercanías: apply a GTFS-RT delay/cancellation map to a cached schedule.
@@ -356,20 +370,23 @@ let CERH=null,CERH_CH=null; // recomputed on every render pass (Atocha / Chamart
 
 /* ---------- HERO ---------- */
 function renderHero(){
-  const base=NOW_H>=0?NOW_H:12, h=heroWhen==='now'?base:(base+1)%24;
-  document.getElementById('heroCap').textContent = heroWhen==='now'?`¿Dónde ir ahora? · ${hh(h)}`:`¿Dónde ir? · próxima ${hh(h)}`;
+  const base=NOW_H>=0?NOW_H:12, h=heroWhen==='now'?base:(base+1)%24, nm=DAY==='next';
+  document.getElementById('heroCap').textContent = nm
+    ? (heroWhen==='now'?`¿Dónde ir mañana a las ${hh(h)}?`:`¿Dónde ir mañana? · próxima ${hh(h)}`)
+    : (heroWhen==='now'?`¿Dónde ir ahora? · ${hh(h)}`:`¿Dónde ir? · próxima ${hh(h)}`);
   const ent=ACT.map(t=>({k:t,short:t,name:'Terminal '+t,n:FLIGHTS.filter(f=>f.hour===h&&f.terminal===t).length}));
   ent.push({k:'ATO',short:'🚆',name:'Atocha (tren)',n:trainsAt(h)});
   ent.push({k:'CHM',short:'🚆',name:'Chamartín (tren)',n:trainsChAt(h)});
   const ranked=ent.sort((a,b)=>b.n-a.n), top=ranked[0], max=Math.max(1,top.n);
   const w=document.getElementById('heroWinner');
+  const at=`a las ${hh(h)}${nm?' de mañana':''}`;
   if(top.n===0){
     w.innerHTML=`<div class="wtile" style="background:var(--faint)"><span class="lab">—</span></div>`+
-      `<div class="wtxt"><div class="none">Sin llegadas</div><div class="small">a las ${hh(h)}</div></div>`;
+      `<div class="wtxt"><div class="none">Sin llegadas</div><div class="small">${at}</div></div>`;
   }else{
     w.innerHTML=`<div class="wtile" style="background:${COLOR[top.k]}"><span class="lab">${top.short}</span><span class="go">VE AQUÍ</span></div>`+
       `<div class="wtxt"><div class="big" style="color:${COLOR[top.k]}">${top.n}</div>`+
-      `<div class="small">llegadas a <b>${top.name}</b> a las ${hh(h)}</div></div>`;
+      `<div class="small">llegadas a <b>${top.name}</b> ${at}</div></div>`;
   }
   document.getElementById('heroRank').innerHTML=ranked.map((r,i)=>
     `<div class="rk ${i===0&&r.n>0?'win':''}"><div class="nm" style="color:${COLOR[r.k]}">${r.k==='ATO'?'Atocha':r.k==='CHM'?'Cham.':r.k}</div>`+
@@ -377,8 +394,8 @@ function renderHero(){
     `<div class="ct">${r.n}</div></div>`).join('');
   const cl=document.getElementById('heroCer');
   const cerParts=[];
-  if(CER.length)cerParts.push(`Atocha <b>${CERH[h].n}</b>`);
-  if(CER_CH.length)cerParts.push(`Chamartín <b>${CERH_CH[h].n}</b>`);
+  if(DAY==='today'&&CER.length)cerParts.push(`Atocha <b>${CERH[h].n}</b>`);
+  if(DAY==='today'&&CER_CH.length)cerParts.push(`Chamartín <b>${CERH_CH[h].n}</b>`);
   if(cerParts.length){
     cl.style.display='block';
     cl.innerHTML=`🚈 Cercanías a las ${hh(h)} — ${cerParts.join(' · ')} (fuera del ranking, poco taxi)`;
@@ -419,7 +436,7 @@ function renderTable(){
   th.innerHTML=`<div class="h">Hora</div>`+cols.map(c=>`<div>${c}</div>`).join('')+
     `<div class="ld">Atocha</div><div class="chm">Chamartín</div>`;
   const tb=document.getElementById('airBody'); tb.innerHTML='';
-  const past=NOW_H>0?NOW_H:0;
+  const past=(DAY==='today'&&NOW_H>0)?NOW_H:0;  // tomorrow is all in the future — no collapsing
   if(past>0){
     const x=document.createElement('div'); x.className='xrow';
     x.textContent=pastOpen?`▾ Ocultar horas anteriores`:`▸ Ver ${past} hora${past>1?'s':''} anterior${past>1?'es':''}`;
@@ -430,7 +447,7 @@ function renderTable(){
     if(h<past && !pastOpen) continue;
     let tot=0; cols.forEach(c=>tot+=grid[h][c]);
     const ld=trainsAt(h), ldch=trainsChAt(h);
-    const isNow=(h===NOW_H), row=document.createElement('div');
+    const isNow=(DAY==='today'&&h===NOW_H), row=document.createElement('div');
     row.className=`trow ${(tot+ld+ldch)===0?'empty':''} ${isNow?'now':''} ${openHour===h?'open':''}`;
     row.style.cssText=gridCss(n);
     row.innerHTML=`<div class="h">${isNow?'':'<span class="chev">▶</span>'}${hh(h)}${isNow?' <span class="nowchip">AHORA</span>':''}</div>`+
@@ -441,13 +458,15 @@ function renderTable(){
     if(openHour===h){ const d=document.createElement('div'); d.className='detail'; d.appendChild(detailFor(h)); tb.appendChild(d); }
   }
   document.getElementById('tblTag').textContent=
+    (DAY==='next'?'programación · ':'')+
     (cols.length===ACT.length?'todas las terminales':cols.join('·'))+' + Atocha + Chamartín';
 }
 
-/* ---------- cercanías strip: 24-hour heat, both stations, out of ranking ---------- */
+/* ---------- cercanías strip: 24-hour heat, both stations, out of ranking.
+   Today only — the Mañana view hides it (fixed timetable, little taxi value). ---------- */
 function renderCerStrip(){
   const el=document.getElementById('cerStrip');
-  if(!CER.length&&!CER_CH.length){ el.style.display='none'; return; }
+  if(DAY!=='today' || (!CER.length&&!CER_CH.length)){ el.style.display='none'; return; }
   el.style.display='';
   let mx=1;
   for(let h=0;h<24;h++)mx=Math.max(mx,(CER.length?CERH[h].n:0),(CER_CH.length?CERH_CH[h].n:0));
@@ -511,8 +530,8 @@ function detailFor(h){
   }
   ldSection(box,h,'🚄 Atocha LD',TRAINS,'var(--atocha)');
   ldSection(box,h,'🚄 Chamartín LD',TRAINS_CH,'var(--cham)');
-  if(CER.length)cerSection(box,h,'🚈 Cercanías Atocha',CERH[h]);
-  if(CER_CH.length)cerSection(box,h,'🚈 Cercanías Chamartín',CERH_CH[h]);
+  if(DAY==='today'&&CER.length)cerSection(box,h,'🚈 Cercanías Atocha',CERH[h]);
+  if(DAY==='today'&&CER_CH.length)cerSection(box,h,'🚈 Cercanías Chamartín',CERH_CH[h]);
   return box;
 }
 
@@ -538,10 +557,10 @@ function renderSources(){
   const rows=[
     {ic:'✈️',badge:'<span class="badge blive">EN VIVO</span>',
      t:'<a href="https://www.aeropuertomadrid-barajas.com/eng/madrid-airport-flight-arrivals.htm">aeropuertomadrid-barajas.com</a>',
-     d:'Tablón de llegadas del aeropuerto, día completo por terminal. Se actualiza en cada refresco (~10 min).'},
+     d:'Tablón de llegadas del aeropuerto, día completo por terminal. Se actualiza en cada refresco (~30 min). La vista «Mañana» usa la programación publicada de Aena (horas previstas, sin estados en vivo).'},
     {ic:'🚄',badge:'<span class="badge bsched">HORARIO</span>',
      t:'Renfe datos abiertos — <a href="https://data.renfe.com/">GTFS AV/LD</a>',
-     d:'Horario oficial del día de larga distancia con destino final Atocha o Chamartín (AVE, Alvia, Avlo, Avant, Intercity, MD). Sin retrasos en vivo.'},
+     d:'Horario oficial de hoy y mañana de larga distancia con destino final Atocha o Chamartín (AVE, Alvia, Avlo, Avant, Intercity, MD). Sin retrasos en vivo.'},
   ];
   if(CER.length||CER_CH.length) rows.push(
     {ic:'🚈',badge:rtOk?'<span class="badge brt">TIEMPO REAL</span>':'<span class="badge bsched">HORARIO</span>',
@@ -554,24 +573,35 @@ function renderSources(){
 }
 
 /* ---------- render / refresh ---------- */
+function renderDaySel(){
+  const el=document.getElementById('daySel');
+  if(!FLIGHTS_N.length){ el.style.display='none'; return; }  // data.json without tomorrow yet → no toggle
+  el.style.display='flex';
+  const t=document.getElementById('dayToday'), n=document.getElementById('dayNext');
+  t.textContent='Hoy'+(META.day?` · ${dayLabel(META.day)}`:'');
+  n.textContent='Mañana'+(NEXT_DAY?` · ${dayLabel(NEXT_DAY)}`:'');
+  t.classList.toggle('on',DAY==='today'); n.classList.toggle('on',DAY==='next');
+}
 function renderAll(){
   CERH=CER.length?cerHours(CER,CER_RT):null;
   CERH_CH=CER_CH.length?cerHours(CER_CH,CER_RT_CH):null;
-  renderHero(); renderCards(); renderTable(); renderCerStrip(); renderAirOrigins(); renderTrOrigins(); renderChOrigins(); renderSources();
+  renderDaySel(); renderHero(); renderCards(); renderTable(); renderCerStrip(); renderAirOrigins(); renderTrOrigins(); renderChOrigins(); renderSources();
   updateAge();
   document.getElementById('counts').textContent=
-    `${FLIGHTS.length} vuelos · LD Atocha ${TRAINS.length} · Chamartín ${TRAINS_CH.length} · `+
-    `${(CER.length||CER_CH.length)?`cercanías ${CER.length}+${CER_CH.length}`:'cercanías n/d'} hoy.`;
+    `${FLIGHTS.length} vuelos · LD Atocha ${TRAINS.length} · Chamartín ${TRAINS_CH.length}`+
+    (DAY==='next' ? ` · ${dayLabel(NEXT_DAY)} (programación; cercanías solo hoy).`
+     : ` · ${((CER.length||CER_CH.length)?`cercanías ${CER.length}+${CER_CH.length}`:'cercanías n/d')} hoy.`);
 }
 function apply(data){
-  FLIGHTS=data.flights||[]; TRAINS=data.trains||[]; TRAINS_CH=data.trains_ch||[];
+  RAWF=data.flights||[]; RAWT=data.trains||[]; RAWTCH=data.trains_ch||[];
+  FLIGHTS_N=data.flights_next||[]; TRAINSN=data.trains_next||[]; TRAINSC=data.trains_ch_next||[];
   CER=data.cercanias||[]; CER_CH=data.cercanias_ch||[];
   CER_RT=data.cer_rt||{}; CER_RT_CH=data.cer_rt_ch||{};
   TERMS=data.terminals||['T1','T2','T3','T4']; META=data.meta||{};
+  NEXT_DAY=META.next_day||'';
   NOW_H=madridHour();
-  const tot=dayTotals(); ACT=TERMS.filter(t=>tot[t]>0); if(!ACT.length)ACT=TERMS.slice();
-  selected=new Set([...selected].filter(t=>ACT.includes(t)));
-  if(!selected.size) selected=new Set(ACT);
+  if(DAY==='next'&&!FLIGHTS_N.length) DAY='today';  // data.json predates the tomorrow keys
+  applyDay();
   renderAll();
   if(!BOOTED){
     BOOTED=true;
@@ -599,6 +629,8 @@ function collapse(btnId, boxId){ const b=document.getElementById(btnId), x=docum
   b.onclick=()=>{ const o=x.classList.toggle('show'); b.classList.toggle('open',o); }; }
 document.getElementById('segNow').onclick=()=>{heroWhen='now';seg();renderHero();};
 document.getElementById('segNext').onclick=()=>{heroWhen='next';seg();renderHero();};
+document.getElementById('dayToday').onclick=()=>setDay('today');
+document.getElementById('dayNext').onclick=()=>setDay('next');
 collapse('airOrigToggle','airOrigins'); collapse('trOrigToggle','trOrigins'); collapse('chOrigToggle','chOrigins');
 document.getElementById('refreshBtn').onclick=()=>loadData(true);
 document.getElementById('resetBtn').onclick=()=>{ selected=new Set(ACT); openHour=null; renderCards(); renderTable(); renderAirOrigins(); };

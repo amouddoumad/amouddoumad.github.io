@@ -39,7 +39,7 @@ commits `data.json`, and GitHub Pages serves the static files. The visitor's bro
 only downloads `index.html` + `data.json`.
 
 ```
-GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phone
+GitHub Actions (cron ~30 min)          GitHub Pages (free static host)      Phone
   python scrape.py  ──commit data.json──►  index.html + data.json  ──fetch──►  renders
 ```
 
@@ -69,6 +69,16 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
   Dedupe by `(flight-arrival id, hour, origin)`.
 - Also parses the page's Madrid-local clock (`DD/Mon/YYYY HH:MM`) → `meta.current_hour`,
   `meta.updated`, `meta.day` (YYYY-MM-DD, used as the authoritative "today").
+- **Tomorrow full-day, every run** (`flights_next`, `meta.next_day`) comes from the
+  **Aena JSON board** (`AENA_ConsultarVuelos…dosDias=si`) — the HTML page only publishes
+  a 6-h tomorrow tail (band values `0-3+1`, `3-6+1` in its selector), the JSON carries
+  tomorrow in full (~2400 rows). JSON rows are **one per flight NUMBER** (codeshare
+  variants are separate rows), so dedupe is `(exact horaProgramada HH:MM, terminal, city)`:
+  codeshares share the schedule instant and collapse, distinct flights in the same hour
+  survive. Night check 2026-10-21: 17–23 h window = 222 by minute key, exactly the live
+  HTML board's 222 rows (an hour key merged ~5–15%). `meta.flight_next_status`:
+  `json | kept-previous | empty`. City names are Spanish in JSON (the site is es).
+  When the HTML host 403s, the SAME JSON call serves today + tomorrow (fallback).
 
 ### Trains (Atocha + Chamartín long-distance) — SCHEDULED, full day ✅
 - Source: **Renfe official AV/LD GTFS** — `https://ssl.renfe.com/gtransit/Fichero_AV_LD/google_transit.zip`
@@ -79,7 +89,9 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
   Arrival hour from `arrival_time` (`% 24` for after-midnight). Origin = the trip's
   **first stop** name. Type = `route_short_name` (AVE / AVANT / ALVIA / AVLO /
   Intercity …; Chamartín additionally gets MD / REG.EXP. / REGIONAL).
-- Filtered to **today's active services** via `calendar.txt` + `calendar_dates.txt`.
+- Filtered to the **date's active services** via `calendar.txt` + `calendar_dates.txt`.
+  `scrape_trains(day)` is called for **today and tomorrow** (cache-miss days only —
+  once per day). Tomorrow goes to `trains_next`/`trains_ch_next`.
 - ~110–120 Atocha + ~120–130 Chamartín arrivals/day. **This is a timetable, not
   real-time** (no live delays/cancellations).
 
@@ -93,6 +105,8 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
   feed). We count ALL trains **stopping** there (through stations — passengers alight
   from through trains, unlike LD where only terminating trips count). ~910 Atocha +
   ~730 Chamartín trains/day (C1–C8B). Cached once per day like LD (`meta.cer_status`).
+  **Today only by decision** (2026-10-21): the front end's Mañana view hides the strip —
+  a fixed timetable repeated for tomorrow would double the file for no taxi value.
 - Real-time: **`https://gtfsrt.renfe.com/trip_updates.json`** (official Renfe GTFS-RT,
   no auth, CC-BY, refreshed every 20 s). Its `tripId`s **match this GTFS's trip_ids
   exactly**. Fetched on EVERY run (one fetch serves both stations) into `cer_rt`
@@ -127,8 +141,10 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
 {
   "terminals": ["T1","T2","T3","T4"],
   "flights":  [{"hour":9,"terminal":"T4","city":"Barcelona","code":"BCN"}, ...],
+  "flights_next":[...],           // tomorrow, same shape, from Aena JSON (Spanish cities)
   "trains":   [{"hour":9,"type":"AVE","number":"02061","city":"Sevilla-Santa Justa"}, ...],   // Atocha LD
   "trains_ch":[{"hour":9,"type":"ALVIA","number":"04068","city":"Valladolid-Campo Grande"}, ...], // Chamartín LD
+  "trains_next":[...], "trains_ch_next":[...],   // tomorrow's schedules, same shape
   "cercanias":[{"h":9,"m":34,"l":"C5","t":"1092M19545C5"}, ...],  // Atocha: sched hour/min, line, trip_id
   "cercanias_ch":[{"h":9,"m":12,"l":"C4A","t":"3030J23541C1"}, ...], // Chamartín, same shape
   "cer_rt":   {"1092M20844C5":19, ...},   // Atocha: trip_id -> delay min | "X"=cancelled
@@ -140,6 +156,10 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
     "current_hour": 15,          // Madrid hour at scrape time (client recomputes live)
     "updated": "20 Aug, 14:23",  // Madrid local; client localizes month → "20 ago"
     "day": "2026-08-20",         // authoritative "today" (from airport clock)
+    "next_day": "2026-08-21",    // day+1 (today+1); pairs with flights_next/trains_next
+    "flight_next_count": 620, "flight_next_status": "json",   // json | kept-previous | empty
+    "train_next_count": 104, "train_ch_next_count": 121,
+    "train_next_status": "ok_104", "train_ch_next_status": "ok_121",
     "train_status": "ok_106",    // diagnostic: ok_N | http_403 | err_* | parse_* (per station)
     "train_ch_status": "ok_123",
     "cer_status": "ok_913", "cer_ch_status": "ok_733",
@@ -148,10 +168,17 @@ GitHub Actions (cron ~10 min)          GitHub Pages (free static host)      Phon
 }
 ```
 The front end tolerates missing `trains`/`trains_ch`/`cercanias`/fields (renders empty,
-hides the Chamartín/Cercanías columns). Keep it backward-compatible. `data.json` is
-~120 KB (Pages gzips it). The client computes effective Cercanías hours as
+hides the Chamartín/Cercanías columns) **and missing `*_next` keys** (no Hoy/Mañana
+toggle → single-day view, so old data + new HTML is safe). Keep it backward-compatible.
+`data.json` is ~190 KB (Pages gzips it). The client computes effective Cercanías hours as
 `h*60+m+delay` (per station map) and hides terminals whose day total is 0 (T3 in
 practice — the source never assigns it arrivals).
+**Hoy/Mañana (2026-10-21):** the UI shows a two-button day switch under the hero. Mañana
+re-renders hero/cards/table/origins from the `_next` arrays (no AHORA chip, no past-hour
+collapsing, strip hidden, table tag reads "programación"). The day's arrays
+(`FLIGHTS/TRAINS/TRAINS_CH`) are just swapped pointers (`applyDay()`), so every render
+function stays day-agnostic. Old data whose `meta.day` is already yesterday (day rolled
+between scrapes) is presented normally — the toggle labels carry the real dates.
 
 ---
 
@@ -181,7 +208,7 @@ GitHub → **Actions → "Update arrivals data" → Run workflow** (this is `wor
 
 ## 6. GIT GOTCHAS — read before pushing (this is where things break)
 
-1. **The cron commits `data.json` every ~10 min**, so your local `main` is almost always
+1. **The cron commits `data.json` every ~30 min (:01/:31)**, so your local `main` is almost always
    behind the remote. **Always `git pull --rebase origin main` before `git push`.** Your
    code commits (which don't touch `data.json`) rebase cleanly on top of the bot's commits.
 2. **Do NOT stage/commit/delete `data.json` yourself.** It's cron-owned. If you touched it
@@ -237,7 +264,9 @@ source failed that run.
   gap 113 min, worst 675 min over the last 400 runs; queue delay ≈ 0 — GitHub simply
   doesn't create the events). So the cron is a **backstop only**; the real cadence comes
   from the external pinger (§9). The app also tolerates staleness because NOW is
-  client-side, and the header shows "datos de hace …" when the data gets old (§9 end).
+  client-side. (There used to be a "datos de hace …" staleness badge in the header;
+  the owner had it removed 2026-10-21 because it read as "broken" to drivers — freshness
+  is watched from CI (§9), not shown to the driver.)
 - **Encoding:** all sources are UTF-8. A Windows terminal may render accents as `�` — the
   actual bytes/data are fine. `data.json` is written `ensure_ascii=False`, UTF-8.
 - **Failure resilience:** a failed airport scrape keeps the previous flights; a failed train
@@ -247,7 +276,8 @@ source failed that run.
 ### ⚠️ Train cache gotcha (important if you change train/cercanías logic)
 `scrape.py` computes the LD train schedules **and the Cercanías schedules once per day
 and caches them** in `data.json` (the cache is used only when BOTH stations of a feed
-are present-and-`ok` for the same `meta.day`).
+are present-and-`ok` for the same `meta.day` — and for LD, `meta.next_day` must match
+too, since it now caches today AND tomorrow in one entry).
 **Consequence:** if you change the parsing code and push mid-day, the running job will
 *reuse the cached old data* and your change won't show until the next day. To force a
 same-day re-parse: temporarily bypass the cache check, or wait for `meta.day` to roll
@@ -327,9 +357,13 @@ inactivity / bouncing email, and pauses after repeated failures — e.g. while t
 Authorization header still holds the PAT placeholder) and that the PAT hasn't
 expired.
 
-The UI is honest about the residual gaps too: when `meta.updated` is older than 30 min
-the header adds "datos de hace X" (amber), red from 2 h — a driver never reads stale
-counts as live.
+**Staleness is a CI problem, not a UI problem (2026-10-21).** There used to be a header
+badge showing "datos de hace X" when `meta.updated` aged past 30 min / 2 h. The owner had
+it removed: on a page that now always carries two full days and refreshes every run, it
+signalled "broken" to drivers who didn't care about the scrape pipeline. The header now
+just shows the scrape time. The consequence to accept: **if the pinger dies, drivers see
+stale numbers with no on-page hint** — so watch cadence from CI (§9 health check), not
+from the page. Keep the PAT renewed and the job active.
 
 ---
 
@@ -601,4 +635,6 @@ back into its env file and a panel Start; the owner has not asked for this.
   header) plus a separate Cercanías 24-hour heat strip below it (tap a cell → that
   hour's detail); terminals with zero arrivals all day are hidden automatically (bye
   T3), past hours collapsed by default, soft data refresh (no page reload), and a
-  "datos de hace …" warning in the header when the data is older than ~30 min.
+  **Hoy/Mañana day switch** (2026-10-21): Mañana renders tomorrow's full board from
+  the `_next` arrays. The old "datos de hace …" staleness warning was removed by
+  owner request the same day — freshness is watched from CI, not by the driver.
